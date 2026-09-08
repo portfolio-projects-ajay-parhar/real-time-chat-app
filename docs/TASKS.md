@@ -1,6 +1,6 @@
 # Real-Time Chat App — Agent Task List
 
-> **STATUS: IN PROGRESS (2026-09-09)** — Phase 1 complete.
+> **STATUS: IN PROGRESS (2026-09-09)** — Phases 1-3 complete.
 
 > Derived from [`PLAN.md`](./PLAN.md) and the individual files in the [`phases/`](./phases/) directory. Work through phases **in order** — each phase depends on the previous one. Mark `[/]` when in progress, `[x]` when done. Mirror progress to [`../tasks-progress.md`](../tasks-progress.md).
 
@@ -45,13 +45,13 @@
 
 ## Phase 3 — Authentication
 
-- [ ] NextAuth v4: Credentials provider, Prisma adapter, JWT strategy; `bcryptjs` hashes
-- [ ] `POST /api/auth/register` (zod, 409 duplicate, rate-limited)
-- [ ] `src/lib/auth.ts` — `getAuthSession()`; `requireUser()` guard throwing typed `ApiError`
-- [ ] `GET /api/ws-token` — returns raw session JWT via `getToken()` (handshake fallback)
-- [ ] Sign-in / sign-up pages (React Hook Form + zod, error display)
-- [ ] `(app)` layout guard → redirect `/signin?callbackUrl=…` (verified)
-- [ ] `GET/PATCH /api/me` (profile + avatar key)
+- [x] NextAuth v4: Credentials provider, Prisma adapter, JWT strategy; `bcryptjs` hashes
+- [x] `POST /api/auth/register` (zod, 409 duplicate, rate-limited)
+- [x] `src/lib/auth.ts` — `getAuthSession()`; `requireUser()` guard throwing typed `ApiError`
+- [x] `GET /api/ws-token` — returns raw session JWT via `getToken()` (handshake fallback)
+- [x] Sign-in / sign-up pages (React Hook Form + zod, error display)
+- [x] `(app)` layout guard → redirect `/signin?callbackUrl=…` (verified)
+- [x] `GET/PATCH /api/me` (profile + avatar key)
 
 ## Phase 4 — REST Core
 

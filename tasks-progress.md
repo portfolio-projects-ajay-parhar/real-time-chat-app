@@ -6,7 +6,7 @@
 **IN PROGRESS** — Phase 1 complete (2026-09-09). Prerequisites: Docker (Postgres + Redis), optional Supabase/Upstash for prod, S3/Cloudinary keys for attachments (local provider works without).
 
 ## Prerequisites
-- [ ] Node.js ≥ 20, npm ≥ 10, Docker + compose
+- [x] Node.js ≥ 20 (v24), npm ≥ 10 (v11), Docker + compose (Postgres + Redis healthy via `sg docker`)
 - [ ] Supabase project (optional prod Postgres) / Upstash (optional prod Redis)
 - [ ] S3 **or** Cloudinary credentials (`STORAGE_PROVIDER` picks; `local` for dev)
 - [ ] `gh` CLI authenticated
@@ -26,15 +26,17 @@
 > WS port env var is `WS_PORT` (4001) — `PORT` would collide with Next's own port variable.
 
 ## Phase 2 — Database Schema & Seed
-- [ ] Prisma schema — NextAuth models + `User`, `Conversation`, `ConversationMember`, `Message` (enums, self-relation, `clientId` unique, keyset composite index, `lastMessageAt` index)
-- [ ] `init` migration + singleton Prisma clients (web + ws)
-- [ ] `findOrCreateDirectConversation` — `pg_advisory_xact_lock` on sorted user pair + find-or-create (parallel-call test passes)
-- [ ] Seed — 6 users (`Password123!`), 2 DMs, 2 groups, ~60 messages (reply/edited/soft-deleted/SYSTEM/image), staggered `lastReadAt`, `db:seed` script
+- [x] Prisma schema — NextAuth models + `User`, `Conversation`, `ConversationMember`, `Message` (enums, self-relation, `clientId` unique, keyset composite index, `lastMessageAt` index)
+- [x] `init` migration + singleton Prisma clients (web + ws)
+- [x] `findOrCreateDirectConversation` — `pg_advisory_xact_lock` on sorted user pair + find-or-create (parallel-call test passes)
+- [x] Seed — 6 users (`Password123!`), 2 DMs, 2 groups, 22 messages (reply/edited/soft-deleted/SYSTEM/image), staggered `lastReadAt`, `db:seed` script
 
 ## Phase 3 — Authentication
-- [ ] NextAuth v4 Credentials + JWT + Prisma adapter; register API (zod, 409, rate-limited)
-- [ ] `GET /api/ws-token` (raw JWE for handshake fallback) + ws-side `next-auth/jwt decode()` middleware (tested round-trip)
-- [ ] Sign-in/sign-up pages + `(app)` server guard + `GET/PATCH /api/me`
+- [x] NextAuth v4 Credentials + JWT + Prisma adapter; register API (zod, 409, rate-limited)
+- [x] `GET /api/ws-token` (raw JWE for handshake fallback) — verified: token decodes with `next-auth/jwt decode()` on the ws side
+- [x] Sign-in/sign-up pages (React Hook Form + zod, error display) + `(app)` server guard + `GET/PATCH /api/me`
+- [x] Full curl E2E verified: register 201 → duplicate 409 → /api/me 401 → credentials sign-in → /api/me 200 → ws-token round-trip decode OK
+- [x] `src/lib/auth.ts` — `getAuthSession()`; `requireUser()` guard; typed `ApiError` + `handleApiError` mapper; Redis fixed-window `checkRateLimit`
 
 ## Phase 4 — REST Core
 - [ ] `GET /api/users?q=` directory search
