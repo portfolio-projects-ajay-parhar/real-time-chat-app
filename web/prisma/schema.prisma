@@ -1,0 +1,139 @@
+// Prisma schema — real-time-chat-app (owned by the web workspace; ws imports
+// the generated client from the hoisted node_modules).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------- NextAuth models ----------
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ---------- Chat models ----------
+enum ConversationType {
+  DIRECT
+  GROUP
+}
+
+enum MemberRole {
+  OWNER
+  MEMBER
+}
+
+enum MessageType {
+  TEXT
+  IMAGE
+  FILE
+  SYSTEM
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  passwordHash String
+  image        String?
+  bio          String?
+  lastSeenAt   DateTime @default(now())
+  createdAt    DateTime @default(now())
+
+  accounts    Account[]
+  sessions    Session[]
+  memberships ConversationMember[]
+  messages    Message[]
+}
+
+model Conversation {
+  id            String           @id @default(cuid())
+  type          ConversationType
+  name          String?
+  avatarKey     String?
+  createdById   String
+  createdAt     DateTime         @default(now())
+  lastMessageAt DateTime         @default(now())
+
+  members  ConversationMember[]
+  messages Message[]
+
+  @@index([lastMessageAt(sort: Desc)])
+}
+
+model ConversationMember {
+  id             String     @id @default(cuid())
+  conversationId String
+  userId         String
+  role           MemberRole @default(MEMBER)
+  lastReadAt     DateTime   @default(now())
+  isMuted        Boolean    @default(false)
+  joinedAt       DateTime   @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, userId])
+  @@index([userId])
+}
+
+model Message {
+  id               String      @id @default(cuid())
+  conversationId   String
+  senderId         String? // null → SYSTEM
+  type             MessageType @default(TEXT)
+  body             String?     @db.Text
+  attachmentKey    String?
+  attachmentName   String?
+  attachmentSize   Int?
+  attachmentMime   String?
+  attachmentWidth  Int?
+  attachmentHeight Int?
+  clientId         String? // idempotent resend after reconnect
+  replyToId        String?
+  createdAt        DateTime    @default(now())
+  editedAt         DateTime?
+  deletedAt        DateTime?
+
+  replyTo      Message?     @relation("Replies", fields: [replyToId], references: [id])
+  replies      Message[]    @relation("Replies")
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender       User?        @relation(fields: [senderId], references: [id])
+
+  @@unique([clientId])
+  @@index([conversationId, createdAt(sort: Desc), id])
+  @@index([senderId])
+}
