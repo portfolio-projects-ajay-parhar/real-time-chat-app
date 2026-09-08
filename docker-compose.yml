@@ -1,0 +1,74 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: chat
+      POSTGRES_PASSWORD: chat
+      POSTGRES_DB: chat
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U chat -d chat"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # --- adapter proof (docker compose --profile prod up) ---
+  ws-1:
+    profiles: ["prod"]
+    build: ./ws
+    environment:
+      WS_PORT: "4001"
+      DATABASE_URL: postgresql://chat:chat@postgres:5432/chat?schema=public
+      REDIS_URL: redis://redis:6379
+      ORIGIN: http://localhost:3000
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET}
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+
+  ws-2:
+    profiles: ["prod"]
+    build: ./ws
+    environment:
+      WS_PORT: "4001"
+      DATABASE_URL: postgresql://chat:chat@postgres:5432/chat?schema=public
+      REDIS_URL: redis://redis:6379
+      ORIGIN: http://localhost:3000
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET}
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+
+  web:
+    profiles: ["prod"]
+    build: ./web
+    environment:
+      DATABASE_URL: postgresql://chat:chat@postgres:5432/chat?schema=public
+      REDIS_URL: redis://redis:6379
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET}
+      NEXTAUTH_URL: http://localhost:3000
+      WS_INTERNAL_URL: http://ws-1:4001
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+
+volumes:
+  pgdata:
+  redisdata:

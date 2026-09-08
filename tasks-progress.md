@@ -3,7 +3,7 @@
 > Mirror of [`docs/TASKS.md`](./docs/TASKS.md). Tick boxes as each item completes. The "BUILD PASSING" line at the bottom is updated once typecheck + tests + build run clean.
 
 ## Status
-**NOT STARTED** — planning complete (docs/PLAN.md + docs/TASKS.md + 10 phase files, 2026-09-08). Prerequisites: Docker (Postgres + Redis), optional Supabase/Upstash for prod, S3/Cloudinary keys for attachments (local provider works without).
+**IN PROGRESS** — Phase 1 complete (2026-09-09). Prerequisites: Docker (Postgres + Redis), optional Supabase/Upstash for prod, S3/Cloudinary keys for attachments (local provider works without).
 
 ## Prerequisites
 - [ ] Node.js ≥ 20, npm ≥ 10, Docker + compose
@@ -12,12 +12,18 @@
 - [ ] `gh` CLI authenticated
 
 ## Phase 1 — Monorepo Setup & Infrastructure
-- [ ] npm workspaces (`shared`, `ws`, `web`) + root scripts (`dev`, `typecheck`, `test`, `db:*`)
-- [ ] `@chat/shared` — event constants + zod payload schemas + inferred types
-- [ ] `ws/` — Socket.IO + ioredis + tsx dev skeleton, health endpoint
-- [ ] `web/` — Next.js 16 scaffold (TS, Tailwind v4, src dir) + `/socket.io` rewrite
-- [ ] docker-compose (postgres:16 + redis:7, healthchecks) + `.env.example`/`.env`
-- [ ] `npm run dev` boots both processes; `npm run typecheck` green ×3
+- [x] npm workspaces (`shared`, `ws`, `web`) + root scripts (`dev`, `typecheck`, `test`, `db:*`)
+- [x] `@chat/shared` — event constants + zod payload schemas + inferred types (built with tsup)
+- [x] `ws/` — Socket.IO + ioredis + tsx dev skeleton, health endpoint (`GET :4001/health`)
+- [x] `web/` — Next.js 16 scaffold (TS, Tailwind v4, src dir) + `/socket.io` rewrite
+- [x] docker-compose (postgres:16 + redis:7, healthchecks) + `.env.example`/`.env` — both containers healthy
+- [x] `npm run dev` boots both processes; `npm run typecheck` green ×3
+
+> **Implementation notes (Phase 1):** Socket.IO is mounted at custom path `/socket.io/ws`
+> (ws server + client) because Next.js rewrites cannot match the bare engine.io default
+> path, and Next normalizes trailing slashes so `/socket.io/ws/` needs an explicit rewrite
+> pair (`/socket.io/ws/` and `/socket.io/ws`). `skipTrailingSlashRedirect: true` is required.
+> WS port env var is `WS_PORT` (4001) — `PORT` would collide with Next's own port variable.
 
 ## Phase 2 — Database Schema & Seed
 - [ ] Prisma schema — NextAuth models + `User`, `Conversation`, `ConversationMember`, `Message` (enums, self-relation, `clientId` unique, keyset composite index, `lastMessageAt` index)
@@ -82,4 +88,4 @@
 
 ---
 
-**BUILD PASSING:** ❌ not yet run (scaffold not created)
+**BUILD PASSING:** ✅ typecheck green ×3 (shared/ws/web); web build green; ws health 200; web 200; `/socket.io/ws` proxy verified in dev + prod (2026-09-09)

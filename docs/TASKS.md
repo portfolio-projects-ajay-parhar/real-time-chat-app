@@ -1,6 +1,6 @@
 # Real-Time Chat App — Agent Task List
 
-> **STATUS: NOT STARTED (2026-09-08)** — plan complete (`PLAN.md` + 10 phase files), implementation pending.
+> **STATUS: IN PROGRESS (2026-09-09)** — Phase 1 complete.
 
 > Derived from [`PLAN.md`](./PLAN.md) and the individual files in the [`phases/`](./phases/) directory. Work through phases **in order** — each phase depends on the previous one. Mark `[/]` when in progress, `[x]` when done. Mirror progress to [`../tasks-progress.md`](../tasks-progress.md).
 
@@ -20,16 +20,16 @@
 ## Phase 1 — Monorepo Setup & Infrastructure
 
 ### 1.1 Workspaces
-- [ ] Root `package.json` with `workspaces: ["web", "ws", "shared"]` + root scripts (`dev`, `typecheck`, `lint`, `test`, `db:*`)
-- [ ] `shared/` package (`@chat/shared`): `events.ts`, `schemas.ts` (zod), `types.ts`; built with `tsup` or consumed via TS paths
-- [ ] `ws/` package (`@chat/ws`): tsx dev, `src/index.ts` boots http + Socket.IO on `WS_PORT` (4001)
-- [ ] `web/` app: `npx create-next-app@latest web --typescript --tailwind --eslint --app --src-dir`
+- [x] Root `package.json` with `workspaces: ["web", "ws", "shared"]` + root scripts (`dev`, `typecheck`, `lint`, `test`, `db:*`)
+- [x] `shared/` package (`@chat/shared`): `events.ts`, `schemas.ts` (zod), `types.ts`; built with `tsup`
+- [x] `ws/` package (`@chat/ws`): tsx dev, `src/index.ts` boots http + Socket.IO on `WS_PORT` (4001)
+- [x] `web/` app: create-next-app (TypeScript, Tailwind v4, App Router, src dir)
 
 ### 1.2 Infrastructure
-- [ ] `docker-compose.yml`: `postgres:16` (vol, healthcheck) + `redis:7` (healthcheck); optional `web`, `ws-1`, `ws-2` profile for the adapter proof
-- [ ] `.env.example` + `.env` — `DATABASE_URL`, `NEXTAUTH_SECRET`, `NEXTAUTH_URL`, `WS_PORT`, `WS_INTERNAL_URL`, `REDIS_URL`, `STORAGE_PROVIDER`, storage keys
-- [ ] Next `rewrites`: `/socket.io/:path*` → `WS_INTERNAL_URL/socket.io/:path*`
-- [ ] Root scripts verified: `npm run dev` starts web + ws concurrently; both health-check green
+- [x] `docker-compose.yml`: `postgres:16` (vol, healthcheck) + `redis:7` (healthcheck); `web`, `ws-1`, `ws-2` prod profile for the adapter proof
+- [x] `.env.example` + `.env` — `DATABASE_URL`, `NEXTAUTH_SECRET`, `NEXTAUTH_URL`, `WS_PORT`, `WS_INTERNAL_URL`, `REDIS_URL`, `STORAGE_PROVIDER`, storage keys
+- [x] Next `rewrites`: `/socket.io/:path*` → `WS_INTERNAL_URL/socket.io/:path*` (custom engine.io path `/socket.io/ws`, see tasks-progress.md notes)
+- [x] Root scripts verified: web + ws boot, health checks green, typecheck green ×3
 
 ## Phase 2 — Database Schema & Seed
 

@@ -1,0 +1,33 @@
+{
+  "name": "real-time-chat-app",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "web",
+    "ws",
+    "shared"
+  ],
+  "scripts": {
+    "dev": "concurrently -n web,ws -c cyan,magenta \"npm run dev -w web\" \"npm run dev -w ws\"",
+    "dev:web": "npm run dev -w web",
+    "dev:ws": "npm run dev -w ws",
+    "build": "npm run build -w shared && npm run build -w web && npm run build -w ws",
+    "typecheck": "npm run typecheck -w shared && npm run typecheck -w ws && npm run typecheck -w web",
+    "lint": "npm run lint -w web",
+    "test": "npm run test -w shared && npm run test -w ws && npm run test -w web",
+    "db:migrate": "npm run db:migrate -w web",
+    "db:seed": "npm run db:seed -w web",
+    "db:studio": "npm run db:studio -w web"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "allowScripts": {
+    "esbuild@0.27.7": true,
+    "esbuild@0.28.2": true,
+    "esbuild@0.21.5": true
+  }
+}

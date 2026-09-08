@@ -26,5 +26,8 @@ npm-debug.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# local media storage
+.data/
+
 # sdd scratch
 .superpowers/
