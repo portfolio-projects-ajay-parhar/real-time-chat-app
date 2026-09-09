@@ -1,6 +1,6 @@
 # Real-Time Chat App — Agent Task List
 
-> **STATUS: IN PROGRESS (2026-09-09)** — Phases 1-3 complete.
+> **STATUS: IN PROGRESS (2026-09-09)** — Phases 1-4 complete.
 
 > Derived from [`PLAN.md`](./PLAN.md) and the individual files in the [`phases/`](./phases/) directory. Work through phases **in order** — each phase depends on the previous one. Mark `[/]` when in progress, `[x]` when done. Mirror progress to [`../tasks-progress.md`](../tasks-progress.md).
 
@@ -55,16 +55,16 @@
 
 ## Phase 4 — REST Core
 
-- [ ] `GET /api/users?q=` — directory search (ILIKE, ≥2 chars, limit 20, excludes self)
-- [ ] `POST /api/conversations` — DIRECT (advisory-lock helper) | GROUP (`{name, memberIds[]}`, OWNER rows, SYSTEM message)
-- [ ] `GET /api/conversations` — inbox: members + lastMessage preview + unread (COUNT after `lastReadAt`) + presence of others; sort `lastMessageAt DESC`
-- [ ] `GET/PATCH/DELETE /api/conversations/[id]` — details; rename (OWNER); leave group (last-owner → 409)
-- [ ] `POST/DELETE /api/conversations/[id]/members` — add (OWNER, GROUP only), remove/leave
-- [ ] `GET /api/conversations/[id]/messages` — keyset cursor (`?cursor=base64url(createdAt~id)&limit=30`) + `?after=` backfill; membership guard; tombstones filtered client-side
-- [ ] `POST /api/conversations/[id]/read` — REST read fallback
-- [ ] `PATCH/DELETE /api/messages/[id]` — edit (sender, TEXT, ≤15 min) / soft delete (sender or OWNER)
-- [ ] Storage layer `src/lib/storage.ts` (s3 | cloudinary | local — Project 8 pattern) + `POST /api/media` + `GET /api/media/[...key]` (local: HMAC-signed)
-- [ ] Unit tests: cursor helpers, keyset SQL round-trip, media validation (mime/magic/size)
+- [x] `GET /api/users?q=` — directory search (ILIKE, ≥2 chars, limit 20, excludes self)
+- [x] `POST /api/conversations` — DIRECT (advisory-lock helper) | GROUP (`{name, memberIds[]}`, OWNER rows, SYSTEM message)
+- [x] `GET /api/conversations` — inbox: members + lastMessage preview + unread (COUNT after `lastReadAt`) + presence of others; sort `lastMessageAt DESC`
+- [x] `GET/PATCH/DELETE /api/conversations/[id]` — details; rename (OWNER); leave group (last-owner → 409)
+- [x] `POST/DELETE /api/conversations/[id]/members` — add (OWNER, GROUP only), remove/leave
+- [x] `GET /api/conversations/[id]/messages` — keyset cursor (`?cursor=base64url(createdAt~id)&limit=30`) + `?after=` backfill; membership guard; tombstones filtered server-side
+- [x] `POST /api/conversations/[id]/read` — REST read fallback
+- [x] `PATCH/DELETE /api/messages/[id]` — edit (sender, TEXT, ≤15 min) / soft delete (sender or OWNER)
+- [x] Storage layer `src/lib/storage.ts` (s3 | cloudinary | local — Project 8 pattern) + `POST /api/media` + `GET /api/media/[...key]` (local: HMAC-signed)
+- [x] Unit tests: cursor helpers, keyset SQL round-trip, media validation (mime/magic/size)
 
 ## Phase 5 — Socket Server Core
 

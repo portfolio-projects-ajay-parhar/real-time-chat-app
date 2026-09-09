@@ -21,7 +21,7 @@ export async function GET() {
     const cookies = Object.fromEntries(
       cookieHeader
         .split(";")
-        .map((p) => p.trim().split(/=(.*)/s))
+        .map((p) => p.trim().split(/=(.*)/))
         .filter((p) => p.length >= 2)
         .map(([k, v]) => [k, decodeURIComponent(v)])
     );

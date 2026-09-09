@@ -1,5 +1,4 @@
 import { Redis } from "ioredis";
-import { prisma } from "./prisma";
 
 const globalForRedis = globalThis as unknown as { redis?: Redis };
 

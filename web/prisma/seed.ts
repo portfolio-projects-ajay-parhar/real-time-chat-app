@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 import { PrismaClient, Prisma, ConversationType } from "@prisma/client";
 import bcrypt from "bcryptjs";
 

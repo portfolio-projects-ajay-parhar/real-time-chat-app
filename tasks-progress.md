@@ -3,7 +3,7 @@
 > Mirror of [`docs/TASKS.md`](./docs/TASKS.md). Tick boxes as each item completes. The "BUILD PASSING" line at the bottom is updated once typecheck + tests + build run clean.
 
 ## Status
-**IN PROGRESS** — Phase 1 complete (2026-09-09). Prerequisites: Docker (Postgres + Redis), optional Supabase/Upstash for prod, S3/Cloudinary keys for attachments (local provider works without).
+**IN PROGRESS** — Phases 1-4 complete (2026-09-09). Prerequisites: Docker (Postgres + Redis), optional Supabase/Upstash for prod, S3/Cloudinary keys for attachments (local provider works without).
 
 ## Prerequisites
 - [x] Node.js ≥ 20 (v24), npm ≥ 10 (v11), Docker + compose (Postgres + Redis healthy via `sg docker`)
@@ -39,12 +39,20 @@
 - [x] `src/lib/auth.ts` — `getAuthSession()`; `requireUser()` guard; typed `ApiError` + `handleApiError` mapper; Redis fixed-window `checkRateLimit`
 
 ## Phase 4 — REST Core
-- [ ] `GET /api/users?q=` directory search
-- [ ] Conversations: create (DIRECT lock / GROUP + OWNER rows + SYSTEM msg), inbox projection (members + lastMessage + unread + presence MGET), detail, rename, leave (last-owner 409), add/remove members
-- [ ] `GET …/messages` keyset pagination (`createdAt,id` cursor + `?after=` backfill) + `POST …/read` fallback
-- [ ] `PATCH/DELETE /api/messages/[id]` (edit ≤15 min / soft delete)
-- [ ] Storage layer (`s3|cloudinary|local`) + `POST /api/media` (allowlist + magic bytes + 10 MB) + signed local streaming
-- [ ] Unit tests: cursor helpers, keyset paging, media validation
+- [x] `GET /api/users?q=` directory search (ILIKE, ≥2 chars, limit 20, excludes self)
+- [x] Conversations: create (DIRECT lock / GROUP + OWNER rows + SYSTEM msg), inbox projection (members + lastMessage + unread raw-SQL COUNT after `lastReadAt` + presence MGET), detail, rename (OWNER), leave (last-owner 409), add/remove members
+- [x] `GET …/messages` keyset pagination (`createdAt,id` cursor + `?after=` backfill, `limit+1` lookahead) + `POST …/read` fallback
+- [x] `PATCH/DELETE /api/messages/[id]` (edit ≤15 min / soft delete)
+- [x] Storage layer (`s3|cloudinary|local`; local = disk + HMAC-signed `/api/media/[...key]`) + `POST /api/media` (allowlist + magic bytes + 10 MB) — s3/cloudinary providers throw "not configured" until their SDK/creds are added
+- [x] Unit tests: cursor helpers, keyset paging (real compose Postgres), media magic-byte table — 14 tests green
+- [x] curl E2E (31 checks): parallel DM create → 1 row, keyset paging no-dupes, tombstones filtered, edit 403/422 rules, last-owner leave 409, signed media 200/403/413/415
+
+> **Implementation notes (Phase 4):** Unread counts in the inbox are one raw SQL
+> join (`Message` × `ConversationMember.lastReadAt`) rather than N per-row COUNTs.
+> Membership guard returns **404** (not 403) so non-members can't probe
+> conversation existence. `vitest.config.ts` added to web with the `@` alias; the
+> keyset integration suite auto-skips when `DATABASE_URL` is absent. The local
+> storage root is `web/.data/uploads` (gitignored).
 
 ## Phase 5 — Socket Server Core
 - [ ] Bootstrap + `@socket.io/redis-adapter` (pub + sub clients); 2nd-instance port flag
