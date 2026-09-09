@@ -3,7 +3,7 @@
 > Mirror of [`docs/TASKS.md`](./docs/TASKS.md). Tick boxes as each item completes. The "BUILD PASSING" line at the bottom is updated once typecheck + tests + build run clean.
 
 ## Status
-**IN PROGRESS** — Phases 1-5 complete (2026-09-09). Prerequisites: Docker (Postgres + Redis), optional Supabase/Upstash for prod, S3/Cloudinary keys for attachments (local provider works without).
+**IN PROGRESS** — Phases 1-7 complete (2026-09-09). Prerequisites: Docker (Postgres + Redis), optional Supabase/Upstash for prod, S3/Cloudinary keys for attachments (local provider works without).
 
 ## Prerequisites
 - [x] Node.js ≥ 20 (v24), npm ≥ 10 (v11), Docker + compose (Postgres + Redis healthy via `sg docker`)
@@ -91,11 +91,15 @@
 > **Implementation notes (Phase 6):** `ChatMessage` wire type added to `@chat/shared` — one serialization shared by REST history, `message:new` and the ack (ws `serializeMessage` mirrors the REST `userCard` include). Rate limiter is an atomic Lua `INCR`+`EXPIRE` (crash-safe window) that fails open. Typing stays broadcast-only: the instance-local registry recomputes `userIds`, clients MERGE and evict at 4 s (cross-instance ghost typers self-heal ≤4 s); throttle 1/2 s per user+conv with a DB membership re-check per broadcast. Unread push = one pipeline (HINCRBY all other members + HGET post-increment) → exact counts. Web cache reducers are pure + unit-tested (`web/src/lib/chat-cache.ts`); typing state is a `useSyncExternalStore` store (`web/src/lib/typing-store.ts`). New integration suite `ws/test/messaging.integration.test.ts` (two instances, 4111/4112): cross-instance delivery, unread push, clientId reconnect dedupe, non-member 404, zod 422, typing broadcast + implicit disconnect stop, exactly-one 429 at the 31st send. Manual test verified live (Alice in browser UI + Bob via `ws/test/bob-live.mjs` driving a real NextAuth sign-in → cookie handshake through the Next rewrite): bob's message appeared in alice's open chat, alice's composer send hit bob with `message:new` + `unread:update` count 1. Env gotchas: a VPN service squats `127.0.0.1:3000` (breaks browser sessions intermittently — use `PORT=3005 npm run dev` for browser testing), and after a prod `next build` a stale `web/.next` makes `next dev` 404 the nested `[id]` child routes until cleared.
 
 ## Phase 7 — Read Receipts & Presence UX
-- [ ] `conversation:read` handler: watermark update + `HDEL` unread + `receipt:update` broadcast
-- [ ] Ticks: pending → sent → read (DIRECT) / "Seen by N" (GROUP, newest own message)
-- [ ] Presence dots + "online / last seen" header subtitle from presence map
-- [ ] Live inbox badges + `document.title` `(n)` count; muted = dot only
-- [ ] Unit tests: watermark math table, title-badge reducer
+- [x] `conversation:read` handler: zod → DB membership re-check (`NOT_FOUND` for non-members) → `lastReadAt` watermark update → Redis `HDEL` unread → `receipt:update` to `conversation:{id}` (adapter cross-instance) → `unread:update {count: 0}` to the reader's `user:{id}` room → ack `{ok, lastReadAt}`
+- [x] Auto read-marking (`useAutoRead`): conversation open + window focus + new message while near-bottom & tab visible, debounced 500 ms, skipped when the watermark already covers the newest message
+- [x] Ticks: pending ⏱ → sent ✓ → read ✓✓ (DIRECT, from member watermarks) / "Seen by N/M" + avatar stack under the newest own message (GROUP)
+- [x] Presence dots + "online / last seen X / offline" header subtitle (DIRECT) / "N members · M online" (GROUP) from `presence:update` events (`presence-store.ts` + `relative-time.ts`)
+- [x] Live inbox badges + `document.title = (n) Chat` (`useTitleBadge`, recomputed from the inbox cache, muted excluded); muted rows render a dot without count
+- [x] Unit tests (`web/test/receipts.test.ts`, 18): watermark math table (equality boundary, self excluded), forward-only receipt patches, `markInboxRead`, `patchInboxPresence`, `totalUnread` + muted-dot badge reducer
+- [x] Integration suite `ws/test/receipts.integration.test.ts` (two instances 4121/4122, same Redis, 6 tests): watermark advance + `HDEL` + ack, cross-instance `receipt:update`, `unread:update {count: 0}` to the reader's user room, non-member `NOT_FOUND`, zod `VALIDATION`, idempotent re-reads
+
+> **Implementation notes (Phase 7):** Read pipeline order: DB watermark → Redis `HDEL` → `receipt:update` (conversation room) → `unread:update {count: 0}` (reader's user room) — the zero-count push is what clears badges on the reader's OTHER devices; the reading device also patches optimistically on the ack. Watermark cache patches are forward-only so out-of-order adapter delivery can't regress them. Auto-read guard chain: visible tab → nearBottom → not-already-read → emit (idle open chats write nothing). Presence is a `useSyncExternalStore` module store fed only by `presence:update`; REST snapshots are the initial state. "Seen by N/M" anchors on the newest own persisted non-deleted message; individual ✓✓ ticks stay DIRECT-only per PLAN §7.2.
 
 ## Phase 8 — Chat UI Polish
 - [ ] `/new`: directory DM flow + group builder (name + multi-select)
@@ -120,4 +124,4 @@
 
 ---
 
-**BUILD PASSING:** ✅ typecheck green ×3 (shared/ws/web); lint green; web build green; ws build green; unit suites green (web 30/30, ws unit); integration suites green (presence 4/4, messaging 8/8 — two instances, real Redis/Postgres); two-party live manual test passed via UI + scripted client (2026-09-09, Phase 6 complete)
+**BUILD PASSING:** ✅ typecheck green ×3 (shared/ws/web); lint green; web build green; ws build green; unit suites green (web 48/48 incl. 18 new receipt tests, ws unit); integration suites green (presence 4/4, messaging 8/8, receipts 6/6 — two instances, real Redis/Postgres); Phase 6 live manual test + Phase 7 read receipts verified via suites (2026-09-09, Phase 7 complete)

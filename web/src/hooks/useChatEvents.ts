@@ -8,17 +8,24 @@ import {
   CONN,
   S2C,
   type ChatMessage,
+  type PresenceUpdateEvent,
+  type ReceiptUpdateEvent,
   type TypingUpdateEvent,
   type UnreadUpdateEvent,
 } from "@chat/shared";
 import {
   appendChatMessage,
   mergeBackfill,
+  patchConversationReceipt,
   patchInboxAfterMessage,
+  patchInboxPresence,
+  patchInboxReceipt,
   patchInboxUnread,
+  type ConversationDetail,
   type InboxConversation,
   type MessagesPage,
 } from "@/lib/chat-cache";
+import { applyPresenceUpdate } from "@/lib/presence-store";
 import { applyTypingUpdate } from "@/lib/typing-store";
 
 /**
@@ -99,6 +106,33 @@ export function useChatEvents(socket: Socket | null, viewerId: string) {
       applyTypingUpdate(payload.conversationId, payload.userIds);
     };
 
+    // Read receipts — advance the watermarks (detail cache drives the ticks,
+    // inbox cache keeps "seen by" data). Forward-only patches.
+    const onReceiptUpdate = (payload: ReceiptUpdateEvent) => {
+      queryClient.setQueryData<ConversationDetail>(
+        ["conversation", payload.conversationId],
+        (prev) => patchConversationReceipt(prev, payload.userId, payload.lastReadAt)
+      );
+      queryClient.setQueryData<InboxConversation[]>(["conversations"], (prev) =>
+        patchInboxReceipt(
+          prev,
+          payload.conversationId,
+          payload.userId,
+          payload.lastReadAt,
+          viewerId
+        )
+      );
+    };
+
+    // Presence — the live store wins over the REST snapshot; the inbox rows'
+    // online flags get the same update so dots stay in sync everywhere.
+    const onPresenceUpdate = (payload: PresenceUpdateEvent) => {
+      applyPresenceUpdate(payload.userId, payload.status, payload.lastSeenAt);
+      queryClient.setQueryData<InboxConversation[]>(["conversations"], (prev) =>
+        patchInboxPresence(prev, payload.userId, payload.status === "online")
+      );
+    };
+
     // Back online: recover anything missed while disconnected + refresh the
     // inbox (unread counts, presence, previews).
     const onConnect = () => {
@@ -109,12 +143,16 @@ export function useChatEvents(socket: Socket | null, viewerId: string) {
     socket.on(S2C.MESSAGE_NEW, onMessageNew);
     socket.on(S2C.UNREAD_UPDATE, onUnreadUpdate);
     socket.on(S2C.TYPING_UPDATE, onTypingUpdate);
+    socket.on(S2C.RECEIPT_UPDATE, onReceiptUpdate);
+    socket.on(S2C.PRESENCE_UPDATE, onPresenceUpdate);
     socket.on(CONN.CONNECT, onConnect);
 
     return () => {
       socket.off(S2C.MESSAGE_NEW, onMessageNew);
       socket.off(S2C.UNREAD_UPDATE, onUnreadUpdate);
       socket.off(S2C.TYPING_UPDATE, onTypingUpdate);
+      socket.off(S2C.RECEIPT_UPDATE, onReceiptUpdate);
+      socket.off(S2C.PRESENCE_UPDATE, onPresenceUpdate);
       socket.off(CONN.CONNECT, onConnect);
     };
   }, [socket, queryClient, viewerId]);

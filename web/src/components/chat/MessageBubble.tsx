@@ -4,19 +4,22 @@ import type { ChatMessage } from "@chat/shared";
 import { Avatar } from "./Avatar";
 
 /**
- * One message row. Phase 6 scope: own-vs-other layout, pending (clock) and
- * failed (⚠) transport states, reply preview, sender grouping (name/avatar
- * only on the first bubble of a run). Read ticks + receipts land in Phase 7;
- * markdown-lite + attachments rendering in Phase 8/9.
+ * One message row. Own-vs-other layout, transport states (pending clock →
+ * sent ✓ → read ✓✓ via the other member's watermark, failed ⚠), reply
+ * preview, sender grouping (name/avatar only on the first bubble of a run).
+ * Markdown-lite + attachments rendering land in Phase 8/9.
  */
 export function MessageBubble({
   message,
   viewerId,
   showSender,
+  read,
 }: {
   message: ChatMessage;
   viewerId: string;
   showSender: boolean;
+  /** DIRECT only: the other member's watermark covers this message. */
+  read?: boolean;
 }) {
   if (message.type === "SYSTEM") {
     return (
@@ -57,7 +60,12 @@ export function MessageBubble({
         <div className="mt-0.5 flex h-4 items-center gap-1 text-[10px] text-zinc-500">
           {message.pending && <span title="sending">⏱</span>}
           {message.failed && <span className="text-red-400">failed to send</span>}
-          {own && !message.pending && !message.failed && <span title="sent">✓</span>}
+          {own && !message.pending && !message.failed &&
+            (read ? (
+              <span title="Read" className="text-indigo-400">✓✓</span>
+            ) : (
+              <span title="Sent">✓</span>
+            ))}
           <span>{new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
         </div>
       </div>

@@ -3,7 +3,9 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import type { Socket } from "socket.io-client";
 import { getChatSocket } from "@/lib/socket-client";
+import { resetPresenceStore } from "@/lib/presence-store";
 import { resetTypingStore } from "@/lib/typing-store";
+import { useTitleBadge } from "./useTitleBadge";
 import { useChatEvents } from "./useChatEvents";
 
 const SocketContext = createContext<Socket | null>(null);
@@ -35,9 +37,12 @@ export function SocketProvider({
     };
   }, []);
 
-  // Leave nothing ghost-typing behind when the tab context goes away.
+  // Leave nothing ghost-typing or stale-presence behind when the tab context
+  // goes away; the title badge rides the same lifecycle.
   useEffect(() => () => resetTypingStore(), []);
+  useEffect(() => () => resetPresenceStore(), []);
 
+  useTitleBadge();
   useChatEvents(socket, viewerId);
 
   return <SocketContext.Provider value={socket}>{children}</SocketContext.Provider>;

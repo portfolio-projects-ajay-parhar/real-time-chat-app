@@ -1,5 +1,6 @@
 "use client";
 
+import { useCallback, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { Avatar } from "./Avatar";
@@ -7,23 +8,15 @@ import { Composer } from "./Composer";
 import { MessageList } from "./MessageList";
 import { TypingDots } from "./TypingDots";
 import { useTypingUsers } from "@/lib/typing-store";
-
-interface ConversationDetail {
-  id: string;
-  type: "DIRECT" | "GROUP";
-  name: string | null;
-  avatarKey: string | null;
-  members: {
-    id: string;
-    role: "OWNER" | "MEMBER";
-    user: { id: string; name: string; image: string | null; bio: string | null; lastSeenAt: string };
-  }[];
-}
+import { usePresenceMap } from "@/lib/presence-store";
+import { isRecentLastSeen, relativeLastSeen } from "@/lib/relative-time";
+import type { ConversationDetail } from "@/lib/chat-cache";
+import { useAutoRead } from "@/hooks/useAutoRead";
 
 /**
- * The chat view — header (title + live typing indicator), message history,
- * composer. Read receipts / presence UX arrive in Phase 7; group management,
- * replies, edit/delete in Phase 8.
+ * The chat view — header (title + live presence/typing indicator), message
+ * history with read receipts, composer with auto read-marking. Group
+ * management, replies, edit/delete arrive in Phase 8.
  */
 export function ChatView({
   conversationId,
@@ -42,15 +35,49 @@ export function ChatView({
     },
   });
 
+  // Auto read-marking inputs, reported by MessageList.
+  const [nearBottom, setNearBottom] = useState(true);
+  const [newestMessageAt, setNewestMessageAt] = useState<string | null>(null);
+  const onNearBottomChange = useCallback((near: boolean) => setNearBottom(near), []);
+  const onNewestChange = useCallback((createdAt: string | null) => setNewestMessageAt(createdAt), []);
+  useAutoRead(conversationId, viewerId, { nearBottom, newestMessageAt });
+
   const typingUserIds = useTypingUsers(conversationId).filter((id) => id !== viewerId);
   const typingNames = (data?.members ?? [])
     .filter((m) => typingUserIds.includes(m.id))
     .map((m) => m.user.name);
+  const isTyping = typingNames.length > 0;
 
   const title =
     data?.type === "GROUP"
       ? data.name ?? "Group"
       : data?.members.find((m) => m.id !== viewerId)?.user.name ?? "Conversation";
+
+  const otherMember = data?.members.find((m) => m.id !== viewerId);
+  const presenceMap = usePresenceMap();
+
+  // Subtitle: typing indicator wins; otherwise presence (DIRECT) or a live
+  // member/online count (GROUP — the store starts empty, so the count only
+  // appears once presence events have landed).
+  const subtitle = (() => {
+    if (!data) return "…";
+    if (data.type === "GROUP") {
+      const online = data.members.filter((m) => m.id !== viewerId && presenceMap[m.id]?.online).length;
+      return online > 0
+        ? `${data.members.length} members · ${online} online`
+        : `${data.members.length} members`;
+    }
+    if (!otherMember) return "Direct message";
+    const entry = presenceMap[otherMember.id];
+    if (entry?.online) return "online";
+    const lastSeenAt = entry?.lastSeenAt ?? otherMember.user.lastSeenAt;
+    return isRecentLastSeen(lastSeenAt) ? `last seen ${relativeLastSeen(lastSeenAt)}` : "offline";
+  })();
+
+  // Watermarks of everyone whose reading is tracked on MY messages.
+  const otherWatermarks = (data?.members ?? [])
+    .filter((m) => m.id !== viewerId)
+    .map((m) => ({ userId: m.id, name: m.user.name, image: m.user.image, lastReadAt: m.lastReadAt }));
 
   return (
     <div className="mx-auto flex h-dvh max-w-2xl flex-col">
@@ -66,14 +93,15 @@ export function ChatView({
           name={title}
           imageKey={
             data?.type === "DIRECT"
-              ? data.members.find((m) => m.id !== viewerId)?.user.image
+              ? otherMember?.user.image
               : data?.avatarKey
           }
           size={36}
+          online={data?.type === "DIRECT" ? presenceMap[otherMember?.id ?? ""]?.online : undefined}
         />
         <div className="min-w-0 flex-1">
           <div className="truncate text-sm font-semibold text-zinc-100">{title}</div>
-          {typingNames.length > 0 ? (
+          {isTyping ? (
             <TypingDots
               label={
                 typingNames.length === 1
@@ -82,14 +110,24 @@ export function ChatView({
               }
             />
           ) : (
-            <div className="text-xs text-zinc-500">
-              {data?.type === "GROUP" ? `${data.members.length} members` : "Direct message"}
+            <div className="flex items-center gap-1.5 text-xs text-zinc-500">
+              {data?.type === "DIRECT" && presenceMap[otherMember?.id ?? ""]?.online && (
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden />
+              )}
+              <span className={subtitle === "online" ? "text-emerald-400" : ""}>{subtitle}</span>
             </div>
           )}
         </div>
       </header>
 
-      <MessageList conversationId={conversationId} viewerId={viewerId} />
+      <MessageList
+        conversationId={conversationId}
+        viewerId={viewerId}
+        type={data?.type ?? "DIRECT"}
+        otherWatermarks={otherWatermarks}
+        onNearBottomChange={onNearBottomChange}
+        onNewestChange={onNewestChange}
+      />
       <Composer conversationId={conversationId} viewerId={viewerId} />
     </div>
   );

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import type { InboxConversation } from "@/lib/chat-cache";
+import { unreadBadge } from "@/lib/chat-cache";
 import { Avatar } from "./Avatar";
 
 function conversationTitle(conv: InboxConversation, viewerId: string): string {
@@ -64,11 +65,27 @@ export function ConversationItem({
           <span className="truncate text-xs text-zinc-400">
             {previewText(conversation, viewerId)}
           </span>
-          {conversation.unread > 0 && (
-            <span className="shrink-0 rounded-full bg-indigo-600 px-2 py-0.5 text-[10px] font-semibold text-white">
-              {conversation.unread > 99 ? "99+" : conversation.unread}
-            </span>
-          )}
+          {(() => {
+            const badge = unreadBadge(conversation);
+            // Muted: "something new" is visible but the count stays private
+            // to the chat (and out of the title badge).
+            if (badge.kind === "count") {
+              return (
+                <span className="shrink-0 rounded-full bg-indigo-600 px-2 py-0.5 text-[10px] font-semibold text-white">
+                  {badge.count > 99 ? "99+" : badge.count}
+                </span>
+              );
+            }
+            if (badge.kind === "dot") {
+              return (
+                <span
+                  aria-label="unread (muted)"
+                  className="h-2 w-2 shrink-0 rounded-full bg-indigo-600"
+                />
+              );
+            }
+            return null;
+          })()}
         </div>
       </div>
     </Link>

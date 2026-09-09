@@ -8,6 +8,7 @@ import { joinUserRooms } from "./rooms.js";
 import { onSocketConnected, onSocketDisconnected, startHeartbeat } from "./presence.js";
 import { registerMessageHandler } from "./handlers/message.js";
 import { registerTypingHandlers, createTypingRegistry, clearTypingOnDisconnect } from "./handlers/typing.js";
+import { registerReadHandler } from "./handlers/read.js";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type ServerWithSocketData = Server<any, any, any, SocketData>;
@@ -71,6 +72,8 @@ export function createChatServer(env: Env): ChatServer {
     // Phase 6 handlers — message send pipeline + typing broadcast
     registerMessageHandler(io, socket, pub);
     registerTypingHandlers(io, socket, typingRegistry);
+    // Phase 7 — read receipts: watermark advance + unread clear + fan-out
+    registerReadHandler(io, socket, pub);
 
     void (async () => {
       try {

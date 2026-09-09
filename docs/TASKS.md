@@ -1,6 +1,6 @@
 # Real-Time Chat App — Agent Task List
 
-> **STATUS: IN PROGRESS (2026-09-09)** — Phases 1-6 complete.
+> **STATUS: IN PROGRESS (2026-09-09)** — Phases 1-7 complete.
 
 > Derived from [`PLAN.md`](./PLAN.md) and the individual files in the [`phases/`](./phases/) directory. Work through phases **in order** — each phase depends on the previous one. Mark `[/]` when in progress, `[x]` when done. Mirror progress to [`../tasks-progress.md`](../tasks-progress.md).
 
@@ -98,13 +98,22 @@
 
 ## Phase 7 — Read Receipts & Presence UX
 
-- [ ] `handlers/read.ts` — `conversation:read` → update `lastReadAt` → `HDEL unread` → `receipt:update` to room → ack
-- [ ] Unread → read transition: opening conversation (viewport + debounce) fires `conversation:read`
-- [ ] `MessageBubble` ticks: pending (clock) → sent (✓) → read (✓✓, from member watermarks)
-- [ ] `PresenceDot` + header "online / last seen X" from presence map + `presence:update` events
-- [ ] Inbox unread badges live via `unread:update`; `document.title = (n) Chat` badge; clear on read
-- [ ] Group chat "Seen by N" line under latest own message
-- [ ] Unit tests: watermark read/unread math; title-badge reducer
+- [x] `handlers/read.ts` — `conversation:read` → zod → membership (DB re-check, `NOT_FOUND` for non-members) → update `lastReadAt` → `HDEL unread` → `receipt:update` to room (adapter cross-instance) → `unread:update {count: 0}` to the reader's `user:{id}` room (badge clear on EVERY device) → ack `{ok, lastReadAt}`
+- [x] Unread → read transition: opening conversation (mount), window focus, and new `MESSAGE_NEW` while active + scrolled to bottom — debounced 500 ms (`useAutoRead`), skipped when the watermark already covers the newest message
+- [x] `MessageBubble` ticks: pending (⏱) → sent (✓) → read (✓✓, from member watermarks — DIRECT only)
+- [x] `PresenceDot` + header "online / last seen X / offline" from presence map + `presence:update` events (`presence-store.ts`, `relative-time.ts`); GROUP header shows "N members · M online"
+- [x] Inbox unread badges live via `unread:update`; `document.title = (n) Chat` badge (`useTitleBadge`, recomputed from inbox cache, muted excluded); muted rows render a dot without count
+- [x] Group chat "Seen by N/M" line + avatar stack under the newest own message
+- [x] Unit tests: watermark read/unread math table (equality boundary, self excluded), forward-only receipt patches, `markInboxRead`, presence patch, `totalUnread` + muted-dot badge reducer (`web/test/receipts.test.ts`, 18 tests)
+- [x] Integration suite `ws/test/receipts.integration.test.ts` (two instances 4121/4122, same Redis): watermark advance + `HDEL` + ack, cross-instance `receipt:update`, `unread:update {count: 0}` to the reader's user room, non-member `NOT_FOUND`, zod `VALIDATION`, idempotent re-reads
+
+### Phase 7 implementation notes
+- Read pipeline ordering (server): DB watermark update → Redis `HDEL` → `receipt:update` to `conversation:{id}` → `unread:update {count: 0}` to `user:{readerId}`. The zero-count push is what clears badges on the reader's *other* devices (DoD: "both B devices' badges clear"); the sending client also patches its inbox optimistically on the ack.
+- Non-member reads return `NOT_FOUND` (404-not-403), matching `message:send` and REST — the phase doc's `FORBIDDEN` sketch was superseded by the Phase 6 convention.
+- Watermark patches are **forward-only** (`patchConversationReceipt` / `patchInboxReceipt` ignore stale events), so out-of-order adapter delivery can never regress a newer watermark.
+- Auto-read guard chain: `document.visible` → `nearBottom` → watermark already covers newest message → emit. An idle open conversation writes nothing; window-focus re-checks are debounced into the same 500 ms timer.
+- Presence is a `useSyncExternalStore` module store (`presence-store.ts`, same pattern as typing-store): REST snapshots (inbox `member.online`, `user.lastSeenAt`) are the initial state; `presence:update` events win from then on and are also patched into the inbox cache.
+- "Seen by N/M" anchors on the newest own *persisted, non-deleted* message; individual ✓✓ ticks stay DIRECT-only (documented in PLAN §phase 7.2).
 
 ## Phase 8 — Chat UI Polish
 
