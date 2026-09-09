@@ -1,6 +1,6 @@
 # Real-Time Chat App — Agent Task List
 
-> **STATUS: IN PROGRESS (2026-09-09)** — Phases 1-4 complete.
+> **STATUS: IN PROGRESS (2026-09-09)** — Phases 1-5 complete.
 
 > Derived from [`PLAN.md`](./PLAN.md) and the individual files in the [`phases/`](./phases/) directory. Work through phases **in order** — each phase depends on the previous one. Mark `[/]` when in progress, `[x]` when done. Mirror progress to [`../tasks-progress.md`](../tasks-progress.md).
 
@@ -68,13 +68,13 @@
 
 ## Phase 5 — Socket Server Core
 
-- [ ] `ws/src/config.ts` — zod env (`PORT`, `DATABASE_URL`, `REDIS_URL`, `NEXTAUTH_SECRET`, `ORIGIN`)
-- [ ] Bootstrap `index.ts` — http server + Socket.IO + `@socket.io/redis-adapter` (pub/sub clients) + CORS for web origin
-- [ ] `auth.ts` — handshake middleware: cookie **or** `auth.token` → `next-auth/jwt decode()`; reject `UNAUTHENTICATED`
-- [ ] `rooms.ts` — on connect: join `user:{id}` + all `conversation:{id}` from DB memberships; on new `conversation:new` joiner side handled by REST → socket rejoin on next connect (documented)
-- [ ] `presence.ts` — `SADD sockets:{userId}`, `SET presence:{userId} EX 70`, 30 s heartbeat refresh, last-socket disconnect → persist `lastSeenAt` + broadcast `presence:update` to **mutual members only** (mutuals computed + cached per user)
-- [ ] `GET /api/conversations` includes presence map (MGET `presence:{id}` for visible members)
-- [ ] Integration smoke: socket.io-client connects with cookie, joins rooms, disconnect flips presence
+- [x] `ws/src/config.ts` — zod env (`WS_PORT`, `DATABASE_URL`, `REDIS_URL`, `NEXTAUTH_SECRET`, `ORIGIN`) — done in Phase 1, verified here
+- [x] Bootstrap `index.ts` → `app.ts` factory (`createChatServer`) — http + Socket.IO + `@socket.io/redis-adapter` (pub/sub) + CORS; health now reports `sockets: io.engine.clientsCount`; second instance = same factory on another port
+- [x] `auth.ts` — handshake middleware: cookie (primary, parsed from `next-auth.session-token`) **or** `auth.token` → `next-auth/jwt decode()` + DB existence check → `socket.data.userId`; rejects `UNAUTHENTICATED`
+- [x] `rooms.ts` — on connect: join `user:{id}` + all `conversation:{id}` from DB memberships; `getMutualUserIds()` (distinct co-members, minus self) for presence targeting
+- [x] `presence.ts` — `sockets:{userId}` SET, `presence:{userId}` TTL 70 s, single 30 s heartbeat interval (pipeline `SET … EX 70` per connected user), last-socket disconnect → `lastSeenAt` persist + `presence:update` broadcast to **mutuals only**. First/last-socket detection is an **atomic Lua `SADD`+`SCARD` / `SREM`+`SCARD`** (SADD returns "newly added", not "first socket" — see tasks-progress note)
+- [x] `GET /api/conversations` presence map — already shipped in Phase 4 (`getPresenceMap` MGET in `getInbox`)
+- [x] Integration smoke (`ws/test/presence.integration.test.ts`): **two instances** (4101/4102, same Redis) — unauthenticated rejection, mutuals-only online broadcast (observer w/o shared conversation receives nothing), exactly-one online event (no adapter dupes), cookie handshake, multi-tab cross-instance tracking (2 tabs → still 1 online event; close one → online; close last → offline + `lastSeenAt` persisted + Redis keys cleaned), health `sockets` count. Auto-skips without `.env`; deterministic via connect/disconnect *settle* on server-side Redis state (vitest `setupFiles` loads root `.env` before PrismaClient snapshots env)
 
 ## Phase 6 — Real-Time Messaging
 

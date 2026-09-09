@@ -15,9 +15,9 @@
     "typecheck": "npm run typecheck -w shared && npm run typecheck -w ws && npm run typecheck -w web",
     "lint": "npm run lint -w web",
     "test": "npm run test -w shared && npm run test -w ws && npm run test -w web",
-    "db:migrate": "npm run db:migrate -w web",
+    "db:migrate": "prisma migrate dev --schema web/prisma/schema.prisma",
     "db:seed": "npm run db:seed -w web",
-    "db:studio": "npm run db:studio -w web"
+    "db:studio": "prisma studio --schema web/prisma/schema.prisma"
   },
   "devDependencies": {
     "concurrently": "^9.1.2"

@@ -3,6 +3,10 @@
 
 generator client {
   provider = "prisma-client-js"
+  // This repo is developed from both Windows and WSL — generate the engine
+  // for both targets so `prisma generate` in one shell doesn't break the other
+  // (debian-openssl-3.0.x = WSL/Ubuntu, native = whatever ran the generate).
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
 }
 
 datasource db {

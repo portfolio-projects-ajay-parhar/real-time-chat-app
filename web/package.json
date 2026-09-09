@@ -14,7 +14,7 @@
     "test": "vitest run"
   },
   "prisma": {
-    "seed": "tsx prisma/seed.ts"
+    "seed": "tsx --env-file-if-exists=../.env prisma/seed.ts"
   },
   "dependencies": {
     "@chat/shared": "*",

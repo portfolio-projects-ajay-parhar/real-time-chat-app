@@ -6,7 +6,7 @@ import { z } from "zod";
 import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { useState } from "react";
+import { Suspense, useState } from "react";
 
 const schema = z.object({
   email: z.string().email("Enter a valid email"),
@@ -14,7 +14,17 @@ const schema = z.object({
 });
 type FormValues = z.infer<typeof schema>;
 
+// useSearchParams() forces a CSR bailout during static prerender — the page
+// must suspend inside a <Suspense> boundary or `next build` fails.
 export default function SignInPage() {
+  return (
+    <Suspense fallback={null}>
+      <SignInForm />
+    </Suspense>
+  );
+}
+
+function SignInForm() {
   const router = useRouter();
   const params = useSearchParams();
   const callbackUrl = params.get("callbackUrl") ?? "/conversations";

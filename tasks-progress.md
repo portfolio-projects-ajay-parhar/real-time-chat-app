@@ -3,7 +3,7 @@
 > Mirror of [`docs/TASKS.md`](./docs/TASKS.md). Tick boxes as each item completes. The "BUILD PASSING" line at the bottom is updated once typecheck + tests + build run clean.
 
 ## Status
-**IN PROGRESS** — Phases 1-4 complete (2026-09-09). Prerequisites: Docker (Postgres + Redis), optional Supabase/Upstash for prod, S3/Cloudinary keys for attachments (local provider works without).
+**IN PROGRESS** — Phases 1-5 complete (2026-09-09). Prerequisites: Docker (Postgres + Redis), optional Supabase/Upstash for prod, S3/Cloudinary keys for attachments (local provider works without).
 
 ## Prerequisites
 - [x] Node.js ≥ 20 (v24), npm ≥ 10 (v11), Docker + compose (Postgres + Redis healthy via `sg docker`)
@@ -55,11 +55,31 @@
 > storage root is `web/.data/uploads` (gitignored).
 
 ## Phase 5 — Socket Server Core
-- [ ] Bootstrap + `@socket.io/redis-adapter` (pub + sub clients); 2nd-instance port flag
-- [ ] Handshake auth (cookie primary / `auth.token` fallback) → `socket.data.userId`
-- [ ] Room join from DB memberships (`user:{id}` + all `conversation:{id}`)
-- [ ] Presence service: `sockets:{userId}` set, `presence:{userId}` TTL 70 s, 30 s heartbeat interval, last-socket offline + `lastSeenAt` persist, **mutual-members-only** broadcast
-- [ ] Integration smoke: connect/disconnect presence events
+- [x] Bootstrap + `@socket.io/redis-adapter` (pub + sub clients); 2nd-instance port flag (`createChatServer(env)` factory in `ws/src/app.ts` — same factory boots the integration suite's second instance)
+- [x] Handshake auth (cookie primary / `auth.token` fallback) → `socket.data.userId` — `next-auth/jwt decode()` + DB existence check; rejects with `UNAUTHENTICATED` (client reads `connect_error.message`)
+- [x] Room join from DB memberships (`user:{id}` + all `conversation:{id}`) + `getMutualUserIds()` for presence targeting
+- [x] Presence service: `sockets:{userId}` set, `presence:{userId}` TTL 70 s, single 30 s heartbeat interval, last-socket offline + `lastSeenAt` persist, **mutual-members-only** broadcast
+- [x] Integration smoke (`ws/test/presence.integration.test.ts`): two instances (4101/4102, same Redis) — cross-instance presence events, mutuals-only, multi-tab tracking, unauth rejection, cookie handshake, health `sockets` count — 4/4 green ×5 runs
+
+> **Implementation notes (Phase 5):**
+> - **`SADD` returns "newly added", not "first socket".** The phase doc's
+>   `const added = await redis.sadd(...); if (added === 1)` fires for *every*
+>   new tab (each socket id is new), re-broadcasting `online` per tab. Fixed
+>   with atomic Lua scripts: `SADD`+`SCARD` on connect (cardinality 1 ⇒ first
+>   socket) and `SREM`+`SCARD` on disconnect (-1 = not tracked, 0 = last
+>   socket) — race-free across instances.
+> - **PrismaClient snapshots `process.env` at construction**, and the ws
+>   server constructs its client at import time — so vitest loads the
+>   repo-root `.env` via `setupFiles` (`ws/test/setup.ts`), not in the test
+>   body. Web's keyset suite is unaffected (it constructs its client after
+>   its own loader runs in the same module).
+> - `schema.prisma` now has `binaryTargets = ["native", "debian-openssl-3.0.x"]`
+>   — the client was previously generated from WSL only, which broke Prisma
+>   on Windows ("generated for debian-openssl-3.0.x"). Regenerate covers both.
+> - Integration tests are deterministic by *settling on server-side Redis
+>   state*: `connect()` resolves only after the server's `SADD` landed,
+>   `disconnectAndSettle()` waits for the `SREM` — client-side events alone
+>   race the async connect/disconnect handlers (phantom sockets).
 
 ## Phase 6 — Real-Time Messaging
 - [ ] `message:send` pipeline: zod → DB membership re-check → Redis rate limit (30/10 s) → insert + `clientId` dedupe + `lastMessageAt` bump → `HINCRBY` unread pipeline → `message:new` to room + `unread:update` to member rooms → ack
@@ -98,4 +118,4 @@
 
 ---
 
-**BUILD PASSING:** ✅ typecheck green ×3 (shared/ws/web); web build green; ws health 200; web 200; `/socket.io/ws` proxy verified in dev + prod (2026-09-09)
+**BUILD PASSING:** ✅ typecheck green ×3 (shared/ws/web); web build green; ws health 200 (now reports `sockets` count); web 200; `/socket.io/ws` proxy verified in dev + prod; ws presence integration suite 4/4 ×5 runs (2026-09-09)
