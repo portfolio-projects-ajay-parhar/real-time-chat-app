@@ -6,6 +6,8 @@ import type { Env } from "./config.js";
 import { authMiddleware, type ChatSocket, type SocketData } from "./auth.js";
 import { joinUserRooms } from "./rooms.js";
 import { onSocketConnected, onSocketDisconnected, startHeartbeat } from "./presence.js";
+import { registerMessageHandler } from "./handlers/message.js";
+import { registerTypingHandlers, createTypingRegistry, clearTypingOnDisconnect } from "./handlers/typing.js";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type ServerWithSocketData = Server<any, any, any, SocketData>;
@@ -60,8 +62,15 @@ export function createChatServer(env: Env): ChatServer {
 
   const heartbeat = startHeartbeat(io, pub);
 
+  // Typing registry is instance-local by design (broadcast-only, PLAN §Redis)
+  const typingRegistry = createTypingRegistry();
+
   io.on("connection", (socket: ChatSocket) => {
     console.log(`[ws] socket connected: ${socket.id} (user: ${socket.data.userId})`);
+
+    // Phase 6 handlers — message send pipeline + typing broadcast
+    registerMessageHandler(io, socket, pub);
+    registerTypingHandlers(io, socket, typingRegistry);
 
     void (async () => {
       try {
@@ -75,6 +84,8 @@ export function createChatServer(env: Env): ChatServer {
 
     socket.on("disconnect", (reason) => {
       console.log(`[ws] socket disconnected: ${socket.id} (${reason})`);
+      // Implicit typing:stop — no ghost typers after a dropped connection.
+      if (socket.data.userId) clearTypingOnDisconnect(io, typingRegistry, socket.data.userId);
       void onSocketDisconnected(io, socket, pub).catch((err) =>
         console.error(`[ws] disconnect handling failed for ${socket.id}:`, err)
       );

@@ -1,6 +1,6 @@
 # Real-Time Chat App — Agent Task List
 
-> **STATUS: IN PROGRESS (2026-09-09)** — Phases 1-5 complete.
+> **STATUS: IN PROGRESS (2026-09-09)** — Phases 1-6 complete.
 
 > Derived from [`PLAN.md`](./PLAN.md) and the individual files in the [`phases/`](./phases/) directory. Work through phases **in order** — each phase depends on the previous one. Mark `[/]` when in progress, `[x]` when done. Mirror progress to [`../tasks-progress.md`](../tasks-progress.md).
 
@@ -78,13 +78,23 @@
 
 ## Phase 6 — Real-Time Messaging
 
-- [ ] `handlers/message.ts` — `message:send`: zod → membership (DB re-check) → Redis rate limit (30/10 s) → Prisma insert (clientId unique dedupe) → `lastMessageAt` bump → `HINCRBY unread:{member}` pipeline → emit `message:new` to room + `unread:update` to each member's `user:{id}` room → ack
-- [ ] `handlers/typing.ts` — start/stop broadcast (server throttle 1/2 s per user+conversation), disconnect → stop
-- [ ] Error mapping: `{ ok:false, code }` acks; typed socket errors
-- [ ] Web `socket-client.ts` — singleton, `transports: ['websocket']`, path `/socket.io`, connect on session, `auth.token` fallback
-- [ ] `useChatEvents` — `message:new` → Query cache append + inbox preview; `unread:update` → badge; `typing:update` → local state; reconnect → backfill `?after=` + inbox invalidate
-- [ ] Composer optimistic send (clientId UUID, pending bubble, ack swap, 429 toast)
-- [ ] **Two-window manual test**: send ↔ receive live; typing dots; badge increments
+- [x] `handlers/message.ts` — `message:send`: zod → membership (DB re-check) → Redis rate limit (30/10 s) → Prisma insert (clientId unique dedupe) → `lastMessageAt` bump → `HINCRBY unread:{member}` pipeline → emit `message:new` to room + `unread:update` to each member's `user:{id}` room → ack
+- [x] `handlers/typing.ts` — start/stop broadcast (server throttle 1/2 s per user+conversation), disconnect → stop
+- [x] Error mapping: `{ ok:false, code }` acks; typed socket errors (`ackError` in `errors.ts`; non-member send → `NOT_FOUND`, 404-not-403 same as REST)
+- [x] Web `socket-client.ts` — singleton, `transports: ['websocket']`, path `/socket.io/ws`, connect on session, `auth.token` fallback
+- [x] `useChatEvents` — `message:new` → Query cache append + inbox preview; `unread:update` → badge; `typing:update` → local state; reconnect → backfill `?after=` + inbox invalidate
+- [x] Composer optimistic send (clientId UUID, pending bubble, ack swap, 429 inline error)
+- [x] **Two-window manual test**: send ↔ receive live; typing dots; badge increments — verified live via UI (Alice) + scripted second client (Bob, `ws/test/bob-live.mjs`) through the same-origin rewrite: bob's send appeared in alice's chat live, alice's composer send reached bob (`message:new` + `unread:update` count 1), typing:update flowed both ways, ack swapped the optimistic bubble
+
+### Phase 6 implementation notes
+- Wire shape: `ChatMessage` in `@chat/shared` — one serialization for REST history, `message:new` and the send ack (`serializeMessage` in ws mirrors the REST `userCard` include).
+- Rate limiter (`ws/src/rateLimit.ts`): atomic Lua `INCR`+`EXPIRE` (crash-safe window creation), fail-open on Redis outage (same trade-off as the REST limiter).
+- Typing is instance-local by design (broadcast-only, PLAN §Redis): the recomputed `userIds` set reflects the emitting instance; clients MERGE (add/refresh each user) and evict at 4 s — removal is timeout-driven, so cross-instance ghost typers self-heal in ≤4 s. Throttle: 1 broadcast / 2 s / (user, conversation), membership re-checked per broadcast (bounded by the throttle).
+- Unread push: one Redis pipeline (HINCRBY every other member + HGET post-increment values) → exact `unread:update` per member to `user:{id}` rooms.
+- Web cache reducers are pure (`web/src/lib/chat-cache.ts`): optimistic append, ack swap by clientId, `markMessageFailed`, `mergeBackfill` (reconnect gap), inbox preview/unread patches — all unit-tested; typing state is a `useSyncExternalStore` store (`web/src/lib/typing-store.ts`).
+- Reconnect recovery: on `connect`, every conversation with cached history fetches `?after={lastCached.createdAt}` and merges via `mergeBackfill`; inbox invalidated.
+- Integration suite (`ws/test/messaging.integration.test.ts`): two instances (4111/4112, same Redis) — cross-instance delivery + persisted ack, unread push to `user:{id}` room, clientId reconnect dedupe (1 row, both acks ok), non-member 404, zod `VALIDATION`, typing broadcast + implicit disconnect stop, exactly-one 429 at the 31st send.
+- Env gotcha during the manual test: a third-party VPN service squatted `127.0.0.1:3000` (Next bound `::`/`0.0.0.0`), splitting browser traffic and breaking sessions intermittently — retested on `PORT=3005`. Also: after a production `next build`, `next dev` served stale 404s for the nested `[id]` child routes until `web/.next` was cleared.
 
 ## Phase 7 — Read Receipts & Presence UX
 

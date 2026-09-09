@@ -82,11 +82,13 @@
 >   race the async connect/disconnect handlers (phantom sockets).
 
 ## Phase 6 — Real-Time Messaging
-- [ ] `message:send` pipeline: zod → DB membership re-check → Redis rate limit (30/10 s) → insert + `clientId` dedupe + `lastMessageAt` bump → `HINCRBY` unread pipeline → `message:new` to room + `unread:update` to member rooms → ack
-- [ ] Typing: throttled broadcast, stop-on-disconnect, 4 s client eviction
-- [ ] Web: singleton socket client + `useChatEvents` (cache patches for message/unread/typing, reconnect backfill via `?after=`)
-- [ ] Optimistic composer (clientId, pending→acked swap, 429 toast, retry)
-- [ ] Two-window manual test passes
+- [x] `message:send` pipeline: zod → DB membership re-check → Redis rate limit (30/10 s) → insert + `clientId` dedupe + `lastMessageAt` bump → `HINCRBY` unread pipeline → `message:new` to room + `unread:update` to member rooms → ack
+- [x] Typing: throttled broadcast, stop-on-disconnect, 4 s client eviction
+- [x] Web: singleton socket client + `useChatEvents` (cache patches for message/unread/typing, reconnect backfill via `?after=`)
+- [x] Optimistic composer (clientId, pending→acked swap, 429 inline error; failed-state bubble, retry lands with Phase 8)
+- [x] Two-window manual test passes
+
+> **Implementation notes (Phase 6):** `ChatMessage` wire type added to `@chat/shared` — one serialization shared by REST history, `message:new` and the ack (ws `serializeMessage` mirrors the REST `userCard` include). Rate limiter is an atomic Lua `INCR`+`EXPIRE` (crash-safe window) that fails open. Typing stays broadcast-only: the instance-local registry recomputes `userIds`, clients MERGE and evict at 4 s (cross-instance ghost typers self-heal ≤4 s); throttle 1/2 s per user+conv with a DB membership re-check per broadcast. Unread push = one pipeline (HINCRBY all other members + HGET post-increment) → exact counts. Web cache reducers are pure + unit-tested (`web/src/lib/chat-cache.ts`); typing state is a `useSyncExternalStore` store (`web/src/lib/typing-store.ts`). New integration suite `ws/test/messaging.integration.test.ts` (two instances, 4111/4112): cross-instance delivery, unread push, clientId reconnect dedupe, non-member 404, zod 422, typing broadcast + implicit disconnect stop, exactly-one 429 at the 31st send. Manual test verified live (Alice in browser UI + Bob via `ws/test/bob-live.mjs` driving a real NextAuth sign-in → cookie handshake through the Next rewrite): bob's message appeared in alice's open chat, alice's composer send hit bob with `message:new` + `unread:update` count 1. Env gotchas: a VPN service squats `127.0.0.1:3000` (breaks browser sessions intermittently — use `PORT=3005 npm run dev` for browser testing), and after a prod `next build` a stale `web/.next` makes `next dev` 404 the nested `[id]` child routes until cleared.
 
 ## Phase 7 — Read Receipts & Presence UX
 - [ ] `conversation:read` handler: watermark update + `HDEL` unread + `receipt:update` broadcast
@@ -118,4 +120,4 @@
 
 ---
 
-**BUILD PASSING:** ✅ typecheck green ×3 (shared/ws/web); web build green; ws health 200 (now reports `sockets` count); web 200; `/socket.io/ws` proxy verified in dev + prod; ws presence integration suite 4/4 ×5 runs (2026-09-09)
+**BUILD PASSING:** ✅ typecheck green ×3 (shared/ws/web); lint green; web build green; ws build green; unit suites green (web 30/30, ws unit); integration suites green (presence 4/4, messaging 8/8 — two instances, real Redis/Postgres); two-party live manual test passed via UI + scripted client (2026-09-09, Phase 6 complete)

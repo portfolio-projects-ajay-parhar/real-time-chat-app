@@ -104,8 +104,9 @@ export async function onSocketDisconnected(
   const remaining = Number(await redis.eval(SREM_SCARD_LUA, 1, socketsKey(userId), socket.id));
   if (remaining !== 0) return;
 
-  // Phase 6: typing handlers will broadcast implicit typing:stop for all
-  // joined conversations here — no ghost typers after a dropped connection.
+  // (The implicit typing:stop broadcast happens in app.ts via
+  // clearTypingOnDisconnect — kept out of presence so this module stays
+  // single-purpose.)
 
   await redis.del(presenceKey(userId));
   const lastSeenAt = new Date();
