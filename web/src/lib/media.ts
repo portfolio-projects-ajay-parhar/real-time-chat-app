@@ -1,17 +1,11 @@
 import { ApiError } from "./api";
+import { AttachmentMimeValues } from "@chat/shared";
 
 /** 10 MB hard cap (matches attachmentSchema.max in @chat/shared). */
 export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 
-/** MIME allowlist — keep in sync with attachmentSchema in @chat/shared. */
-export const ALLOWED_MIMES = [
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-  "image/gif",
-  "application/pdf",
-  "text/plain",
-] as const;
+/** MIME allowlist — single source of truth in @chat/shared. */
+export const ALLOWED_MIMES = AttachmentMimeValues;
 
 export type AllowedMime = (typeof ALLOWED_MIMES)[number];
 

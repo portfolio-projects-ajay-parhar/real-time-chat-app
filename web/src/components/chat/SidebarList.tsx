@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { ConversationItem } from "./ConversationItem";
+import { NotificationsChip } from "./NotificationsChip";
 import { inboxQuery } from "@/lib/queries";
 
 /**
@@ -19,14 +20,17 @@ export function SidebarList({ viewerId }: { viewerId: string }) {
     <>
       <header className="flex items-center justify-between border-b border-zinc-800 px-4 py-3">
         <h1 className="text-lg font-semibold text-zinc-100">Chats</h1>
-        <Link
-          href="/new"
-          className={`rounded-full bg-indigo-600 px-3 py-1 text-xs font-medium text-white hover:bg-indigo-500 ${
-            pathname === "/new" ? "opacity-50" : ""
-          }`}
-        >
-          New chat
-        </Link>
+        <div className="flex items-center gap-2">
+          <NotificationsChip />
+          <Link
+            href="/new"
+            className={`rounded-full bg-indigo-600 px-3 py-1 text-xs font-medium text-white hover:bg-indigo-500 ${
+              pathname === "/new" ? "opacity-50" : ""
+            }`}
+          >
+            New chat
+          </Link>
+        </div>
       </header>
       <div className="flex-1 overflow-y-auto p-2">
         {isLoading && <div className="p-6 text-center text-sm text-zinc-500">Loading…</div>}

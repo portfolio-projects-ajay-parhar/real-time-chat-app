@@ -13,6 +13,7 @@ import type { Redis } from "ioredis";
 import { prisma } from "../lib/prisma.js";
 import { conversationRoom, userRoom } from "../rooms.js";
 import { checkSendRateLimit } from "../rateLimit.js";
+import { validateAttachment } from "../lib/attachment.js";
 import { ackError } from "../errors.js";
 import type { ChatSocket } from "../auth.js";
 
@@ -108,6 +109,16 @@ export function registerMessageHandler(io: Server, socket: ChatSocket, redis: Re
       return reply(ackError("VALIDATION", parsed.error.issues[0]?.message ?? "Invalid payload"));
     }
     const { conversationId, clientId, type, body, attachment, replyToId } = parsed.data;
+
+    // 1b. Attachment defense in depth — mime allowlist + key ownership.
+    //     The REST upload route already sniffed magic bytes; here we reject
+    //     keys the sender never uploaded (a socket payload is not evidence).
+    if (attachment) {
+      const check = validateAttachment({ type, mime: attachment.mime, key: attachment.key, userId });
+      if (!check.ok) {
+        return reply(ackError("VALIDATION", check.reason));
+      }
+    }
 
     // 2. Membership — re-verified in Postgres on EVERY send; being kicked
     //    (or removed after connect) takes effect immediately.

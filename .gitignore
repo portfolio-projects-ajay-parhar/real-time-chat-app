@@ -22,6 +22,9 @@ tsconfig.tsbuildinfo
 .DS_Store
 *.pem
 npm-debug.log*
+# local dev-server scratch logs
+web-dev*.log
+ws-dev.log
 .vercel
 *.tsbuildinfo
 next-env.d.ts

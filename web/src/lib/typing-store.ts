@@ -14,6 +14,8 @@ import { useSyncExternalStore } from "react";
 
 const TYPING_TTL_MS = 4_000; // keep in sync with ws TYPING_TTL_MS
 const EMPTY: string[] = [];
+/** Stable server-render snapshot — the store is empty until a socket event lands. */
+const EMPTY_SNAPSHOT: Record<string, string[]> = {};
 
 type Listener = (snapshot: Record<string, string[]>) => void;
 
@@ -73,8 +75,13 @@ export function getSnapshot(): Record<string, string[]> {
   return snapshot;
 }
 
+/** Server snapshot (required for SSR) — no typing state exists pre-hydration. */
+export function getServerSnapshot(): Record<string, string[]> {
+  return EMPTY_SNAPSHOT;
+}
+
 /** Reactive typing users for one conversation (excluding nobody — filter by viewer upstream). */
 export function useTypingUsers(conversationId: string): string[] {
-  const all = useSyncExternalStore(subscribe, getSnapshot);
+  const all = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
   return all[conversationId] ?? EMPTY;
 }

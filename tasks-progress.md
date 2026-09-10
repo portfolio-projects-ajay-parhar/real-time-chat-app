@@ -3,7 +3,7 @@
 > Mirror of [`docs/TASKS.md`](./docs/TASKS.md). Tick boxes as each item completes. The "BUILD PASSING" line at the bottom is updated once typecheck + tests + build run clean.
 
 ## Status
-**IN PROGRESS** — Phases 1-8 complete (2026-09-10). Prerequisites: Docker (Postgres + Redis), optional Supabase/Upstash for prod, S3/Cloudinary keys for attachments (local provider works without).
+**IN PROGRESS** — Phases 1-9 complete (2026-09-10). Prerequisites: Docker (Postgres + Redis), optional Supabase/Upstash for prod, S3/Cloudinary keys for attachments (local provider works without).
 
 ## Prerequisites
 - [x] Node.js ≥ 20 (v24), npm ≥ 10 (v11), Docker + compose (Postgres + Redis healthy via `sg docker`)
@@ -113,10 +113,17 @@
 > **Implementation notes (Phase 8):** Edit/delete propagation to OTHER clients is refetch-driven per the phase-8 scope note: global `refetchOnWindowFocus` is off, so `ChatView` explicitly invalidates history + detail on window focus/visibility (B sees A's edit/tombstone after refocusing; socket propagation of edits is a listed future improvement, and the `MESSAGE_EDITED`/`MESSAGE_DELETED` event constants already exist in `@chat/shared`). The markdown parser is a pure `parseMarkdownLite` in `markdown.ts` (unit-tested); the React mapping lives in `markdown-lite.tsx` — opening `*`/`**` must not be followed by whitespace and closing runs prefer the last asterisk (`**a *b***` nests correctly); adjacent `**` can never form an empty node. Reply is fully realtime (`message:send` already accepted `replyToId` since Phase 6); optimistic reply bubbles carry the quote. Mobile inbox + desktop sidebar share one `["conversations"]` cache (`lib/queries.ts`), so socket patches hit both. SYSTEM messages from REST group mutations are NOT socket-pushed (same scope note) — they appear on invalidation/refetch.
 
 ## Phase 9 — Notifications & File Sharing
-- [ ] Browser notifications (gesture-gated permission, hidden-tab/inactive-conversation only, click-to-navigate, mute-aware)
-- [ ] Attachment flow: pick → preview → `POST /api/media` → IMAGE/FILE message → optimistic send
-- [ ] Rendering: inline image (no CLS) + lightbox; file card + signed download
-- [ ] Validation e2e: 415 magic-byte mismatch, 413 oversize, dead key → ack `VALIDATION`
+- [x] Browser notifications (gesture-gated permission via 🔔 chip in both inbox headers, hidden-tab/inactive-conversation only, click-to-navigate, mute-aware, self-messages excluded — `lib/notifications.ts` + `useNotifications`)
+- [x] Attachment flow: pick → preview chip → `POST /api/media` → IMAGE/FILE message → optimistic send (dims measured client-side via `createImageBitmap`; upload failure → bubble removed + 413/415 banner; retry = press Send again, file stays selected)
+- [x] Rendering: inline image (no CLS from measured dims) + lightbox (portal/Esc/backdrop/download); file card (icon/name/humanized size) + signed download — all URLs fetch-time-signed via `GET /api/media/sign` + `lib/media-url.ts` cache (`useSignedMediaUrl`, also fixed `Avatar`'s previously unsigned `/api/media/{key}` src)
+- [x] Validation e2e (server + client + ws): evil.png (ELF) → 415, 11 MB → 413, off-allowlist mime → 415, foreign/dead attachment key over the socket → ack `VALIDATION` (ws `validateAttachment` mime allowlist + `attachments/{senderId}/` key ownership)
+- [x] Two-window verification (real browsers, live ws): A→B inline image + caption + ✓✓ ticks, B renders with no refresh, lightbox both sides, FILE download returns exact bytes, 413/415 banners, typing with pending attachment
+- [x] Unit tests: `web/test/attachments.test.ts` (pre-check 413/415 table, humanizeSize, attachToOptimistic/removeChatMessage), `web/test/notifications.test.ts` (shouldNotify matrix, notificationBody), `web/test/media-url.test.ts` (sign cache TTL/failure), `ws/test/attachment.test.ts` (guard table) — 138 tests green
+- [ ] (Stretch, deferred) Offline email digest via Resend
+
+> **Implementation notes (Phase 9):** Signed URLs are never persisted — keys resolve at render time through `GET /api/media/sign?key=` (session-guarded, 1 h signature) with a 55-min module cache; `Avatar` migrated onto the same helper (it had been rendering unsigned URLs that 403 under the local provider). The mime allowlist moved to `AttachmentMimeValues` in `@chat/shared` (REST route + client pre-check + ws handler share one source of truth). Chromium derives upload MIME from the file *extension* (an ELF renamed evil.png reports `image/png`), so the client pre-check cannot catch binaries — the server magic-byte sniff remains the real 415 gate (proven live via UI + curl). Upload failures remove the pending bubble and surface the reason in the composer error banner (the "toast"); `failed` bubble state stays reserved for socket-ack failures. OS notification pop-ups can't be granted in headless Chromium, so the shouldNotify matrix is unit-tested instead. Pre-existing Phase 8 lint debt (4 React-Compiler eslint errors in GroupMembersSheet/MessageList, verified present at HEAD before this phase) deferred to the Phase 10 final sweep since the CI gate includes lint.
+>
+> **Fix (surfaced during Phase 9 live verification):** the chat route intermittently 500'd on hard navigation — `useSyncExternalStore` was called without the third `getServerSnapshot` argument in both module stores (`typing-store.ts` ×1, `presence-store.ts` ×2), which React requires whenever a client component is SSR'd. Both stores now return a stable empty snapshot on the server (no socket state exists pre-hydration, and it matches the client's initial state, so hydration stays consistent). Verified: 4× consecutive hard navigations to `/conversations/[id]` all return 200 with the full chat rendered; socket connects through the same-origin rewrite and the send→ack pipeline works.
 
 ## Phase 10 — Testing, Docker & CI/CD
 - [ ] Unit suites green (shared / ws / web)
@@ -127,4 +134,4 @@
 
 ---
 
-**BUILD PASSING:** ✅ typecheck green ×3 (shared/ws/web); web build green (`next build`, incl. `/new`); unit suites green (web 70 unit tests incl. 32 new Phase 8 tests: markdown + XSS table, grouping, edit/delete reducers; ws unit); Phase 8 UI shipped (split view, /new, group sheet, edit/delete/reply, markdown-lite, date separators, scroll-up pagination). Integration suites (presence/messaging/receipts/keyset) verified in earlier phases — require Docker Postgres+Redis, which was offline during the Phase 8 session; re-run `npm run test -w ws -w web` once Docker is up (2026-09-10, Phase 8 complete)
+**BUILD PASSING:** ✅ typecheck green ×3 (shared/ws/web); web build green (`next build`, incl. new `/api/media/sign`); unit suites green (web 105 tests, ws 33 incl. two-instance integration vs real Redis/Postgres); lint green except 4 pre-existing Phase 8 React-Compiler eslint errors (GroupMembersSheet/MessageList, deferred to Phase 10). Phase 9 verified LIVE end-to-end with two real browser contexts (Alice via MCP browser + Bob in a second context, Next :3005 + ws :4001, compose Postgres/Redis): image + file sends cross-window with inline render/lightbox/download, 413/415 validation banners, foreign-key send → ack `VALIDATION`, typing across windows (2026-09-10, Phase 9 complete)

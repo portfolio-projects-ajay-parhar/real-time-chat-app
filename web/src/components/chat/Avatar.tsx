@@ -1,7 +1,10 @@
 "use client";
 
+import { useSignedMediaUrl } from "@/hooks/useSignedMediaUrl";
+
 /**
- * Avatar from a storage key (served via the local media route) or initials.
+ * Avatar from a storage key (served via the signed media URL — Phase 9) or
+ * initials.
  */
 export function Avatar({
   name,
@@ -19,13 +22,14 @@ export function Avatar({
     .slice(0, 2)
     .map((w) => w[0]?.toUpperCase() ?? "")
     .join("");
+  const src = useSignedMediaUrl(imageKey);
 
   return (
     <span className="relative inline-flex shrink-0">
-      {imageKey ? (
+      {imageKey && src ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
-          src={`/api/media/${imageKey}`}
+          src={src}
           alt={name}
           width={size}
           height={size}

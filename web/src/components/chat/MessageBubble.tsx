@@ -3,7 +3,10 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import type { ChatMessage } from "@chat/shared";
 import { Avatar } from "./Avatar";
+import { Lightbox } from "./Lightbox";
 import { MarkdownLite } from "@/lib/markdown-lite";
+import { useSignedMediaUrl } from "@/hooks/useSignedMediaUrl";
+import { humanizeSize } from "@/lib/attachment";
 
 /**
  * One message row. Own-vs-other layout, transport states (pending clock →
@@ -147,9 +150,9 @@ export function MessageBubble({
                 </button>
               </div>
             </div>
-          ) : message.body ? (
-            <MarkdownLite text={message.body} />
-          ) : null}
+          ) : (
+            <AttachmentBody message={message} />
+          )}
         </div>
         <div className="mt-0.5 flex h-4 items-center gap-1 text-[10px] text-zinc-500">
           {message.pending && <span title="sending">⏱</span>}
@@ -188,6 +191,103 @@ export function MessageBubble({
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Attachment + caption rendering (Phase 9.3): IMAGE inline with
+ * client-measured dimensions (no layout shift) and a lightbox on click;
+ * FILE as a download card with a humanized size; a "pending" bubble without
+ * a key yet is mid-upload. Caption (body) renders below the attachment.
+ */
+function AttachmentBody({ message }: { message: ChatMessage }) {
+  const [lightbox, setLightbox] = useState(false);
+  const url = useSignedMediaUrl(message.attachmentKey);
+  const waitingForUpload =
+    message.pending && message.type !== "TEXT" && !message.attachmentKey;
+
+  if (message.type === "IMAGE" || message.type === "FILE") {
+    return (
+      <>
+        {waitingForUpload && <UploadingPlaceholder />}
+        {!waitingForUpload && message.type === "IMAGE" && message.attachmentKey && (
+          <>
+            {url ? (
+              <button
+                type="button"
+                onClick={() => setLightbox(true)}
+                title="Open image"
+                className="block"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={url}
+                  alt={message.attachmentName ?? "Shared image"}
+                  loading="lazy"
+                  width={message.attachmentWidth ?? undefined}
+                  height={message.attachmentHeight ?? undefined}
+                  className="max-h-80 w-auto max-w-full rounded-lg object-contain"
+                />
+              </button>
+            ) : (
+              <div
+                aria-label="Loading image"
+                className="h-48 w-64 animate-pulse rounded-lg bg-zinc-700/40"
+              />
+            )}
+          </>
+        )}
+        {!waitingForUpload && message.type === "FILE" && message.attachmentKey && (
+          <a
+            href={url ?? "#"}
+            download={message.attachmentName ?? true}
+            aria-disabled={!url}
+            onClick={(e) => {
+              if (!url) e.preventDefault();
+            }}
+            className={`flex items-center gap-3 rounded-xl bg-zinc-900/70 px-3 py-2 text-left ring-1 ring-white/10 transition-colors ${
+              url ? "hover:bg-zinc-900" : ""
+            }`}
+            title="Download file"
+          >
+            <span aria-hidden className="text-2xl">📄</span>
+            <span className="min-w-0">
+              <span className="block max-w-48 truncate text-sm font-medium text-zinc-100">
+                {message.attachmentName ?? "File"}
+              </span>
+              {message.attachmentSize != null && (
+                <span className="text-[10px] text-zinc-500">
+                  {humanizeSize(message.attachmentSize)}
+                </span>
+              )}
+            </span>
+            {url && <span className="ml-1 text-xs text-indigo-400">↓</span>}
+          </a>
+        )}
+        {message.body && (
+          <div className="mt-1 text-sm">
+            <MarkdownLite text={message.body} />
+          </div>
+        )}
+        {lightbox && url && (
+          <Lightbox
+            src={url}
+            alt={message.attachmentName ?? "Shared image"}
+            onClose={() => setLightbox(false)}
+          />
+        )}
+      </>
+    );
+  }
+
+  return message.body ? <MarkdownLite text={message.body} /> : null;
+}
+
+function UploadingPlaceholder() {
+  return (
+    <div className="flex h-16 items-center justify-center rounded-lg bg-zinc-900/60 px-4 text-xs text-zinc-400">
+      Uploading…
     </div>
   );
 }

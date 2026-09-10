@@ -85,6 +85,54 @@ export function markMessageFailed(
   return next;
 }
 
+/**
+ * Upload failed (413/415/no network) — the pending attachment bubble is
+ * removed and the composer's error banner explains why (Phase 9 scope note:
+ * the failed-bubble transport state stays reserved for socket-ack failures).
+ */
+export function removeChatMessage(
+  list: ChatMessage[] | undefined,
+  clientId: string
+): ChatMessage[] {
+  const base = list ?? [];
+  const idx = base.findIndex((m) => m.clientId === clientId);
+  if (idx === -1) return base;
+  return [...base.slice(0, idx), ...base.slice(idx + 1)];
+}
+
+/**
+ * The attachment finished uploading mid-send — patch the optimistic bubble
+ * (by clientId) with the uploaded metadata so the inline image/card starts
+ * rendering from the signed URL while awaiting the send ack.
+ */
+export function attachToOptimistic(
+  list: ChatMessage[] | undefined,
+  clientId: string,
+  attachment: {
+    key: string;
+    name: string;
+    size: number;
+    mime: string;
+    width?: number;
+    height?: number;
+  }
+): ChatMessage[] {
+  const base = list ?? [];
+  const idx = base.findIndex((m) => m.clientId === clientId);
+  if (idx === -1) return base;
+  const next = [...base];
+  next[idx] = {
+    ...next[idx],
+    attachmentKey: attachment.key,
+    attachmentName: attachment.name,
+    attachmentSize: attachment.size,
+    attachmentMime: attachment.mime,
+    attachmentWidth: attachment.width ?? null,
+    attachmentHeight: attachment.height ?? null,
+  };
+  return next;
+}
+
 /** Merge a backfill batch (reconnect gap) into the last history page. */
 export function mergeBackfill(
   pages: MessagesPage[],

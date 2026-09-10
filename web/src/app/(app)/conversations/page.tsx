@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { ConversationItem } from "@/components/chat/ConversationItem";
+import { NotificationsChip } from "@/components/chat/NotificationsChip";
 import { inboxQuery } from "@/lib/queries";
 
 /**
@@ -24,6 +25,7 @@ export default function ConversationsPage() {
         <header className="flex items-center justify-between border-b border-zinc-800 px-4 py-3">
           <h1 className="text-lg font-semibold text-zinc-100">Chats</h1>
           <div className="flex items-center gap-3">
+            <NotificationsChip />
             <span className="text-xs text-zinc-500">{session?.user?.name}</span>
             <Link
               href="/new"

@@ -1,6 +1,6 @@
 # Real-Time Chat App — Agent Task List
 
-> **STATUS: IN PROGRESS (2026-09-10)** — Phases 1-8 complete.
+> **STATUS: IN PROGRESS (2026-09-10)** — Phases 1-9 complete.
 
 > Derived from [`PLAN.md`](./PLAN.md) and the individual files in the [`phases/`](./phases/) directory. Work through phases **in order** — each phase depends on the previous one. Mark `[/]` when in progress, `[x]` when done. Mirror progress to [`../tasks-progress.md`](../tasks-progress.md).
 
@@ -136,12 +136,19 @@
 
 ## Phase 9 — Notifications & File Sharing
 
-- [ ] Browser Notification permission prompt (on first open, not before gesture policy) — notify on `message:new` when `document.hidden` or conversation not active
-- [ ] Image upload flow — attach → preview (dimensions client-measured) → `POST /api/media` → `message:send` IMAGE with caption; inline `<img>` render (signed URL) + lightbox
-- [ ] File upload flow — FILE type card (icon, name, size) + download via signed URL
-- [ ] Attachment validation e2e: oversize → 413 toast, bad mime/magic → 415
-- [ ] Typing + unread behavior with attachments verified two-window
-- [ ] (Stretch) Offline email digest via Resend — background script scanning `lastSeenAt > 24 h` members with unread
+- [x] Browser Notification permission prompt (gesture-gated: 🔔 chip in both inbox headers, never on page load) — notify on `message:new` when `document.hidden` or conversation not active; `isMuted` conversations skip; click → focus + navigate (`useNotifications` in SocketProvider, decision logic in `lib/notifications.ts` unit-tested)
+- [x] Image upload flow — attach → preview chip (thumbnail object-URL) → dims client-measured (`createImageBitmap`) → `POST /api/media` → `message:send` IMAGE with caption; inline `<img>` from a fetch-time signed URL (no CLS) + lightbox (portal, Esc/backdrop, download)
+- [x] File upload flow — FILE type card (icon, name, humanized size) + download via signed URL
+- [x] Attachment validation e2e: oversize → 413 (client pre-check banner + server), bad mime/magic → 415 (server sniffs what Chromium's extension-based MIME mislabels), ws send re-checks mime allowlist + key ownership (`attachments/{senderId}/`) → ack `VALIDATION` (defense in depth)
+- [x] Typing + unread behavior with attachments verified two-window (live browser-to-browser: image renders inline on B without refresh, lightbox both sides, file downloads correct bytes, 415/413 banners, typing with pending attachment)
+- [ ] (Stretch, deferred) Offline email digest via Resend — background script scanning `lastSeenAt > 24 h` members with unread
+
+### Phase 9 implementation notes
+- Signed URL lifecycle: new `GET /api/media/sign?key=` (session-guarded, 1 h TTL) + `lib/media-url.ts` module cache (55 min) + `useSignedMediaUrl` hook; components resolve keys at render time — nothing URL-shaped is persisted. `Avatar` now uses the same helper (it previously rendered unsigned `/api/media/{key}`, which 403s under the local provider).
+- Upload failure handling: the pending attachment bubble is removed and the composer's error banner shows the 413/415 reason (acts as the toast); the failed-bubble transport state stays reserved for socket-ack failures (Phase 6). Client-side pre-check (`lib/attachment.ts`) gives instant 413/415 without a round trip.
+- Chromium reports MIME from the file extension (evil.png → `image/png`), so the client pre-check alone can't catch a binary — the server magic-byte sniff (Phase 4) is the real gate, verified live (415) both via curl and via the browser UI.
+- ws `message:send` now rejects (ack `VALIDATION`) any attachment whose mime is off the shared allowlist (`AttachmentMimeValues` in `@chat/shared` — single source of truth for REST route, client pre-check and ws handler) or whose key is not `attachments/{senderId}/…` (a socket payload is not evidence of upload; keys are minted server-side).
+- Verified live (browser ×2 contexts on ws :4001 + Next :3005): A→B inline image + caption, ✓✓ read ticks, B renders without refresh (`navigationEntries===1`), lightbox open/Esc/download, FILE card + signed download returning exact bytes, 415/413 banners, cross-window typing indicator while an attachment is pending. Real OS notification pop-ups can't be granted in headless Chromium (permission request stays pending) — decision matrix (self/muted/inactive/hidden) covered by `web/test/notifications.test.ts`.
 
 ## Phase 10 — Testing, Docker & CI/CD
 

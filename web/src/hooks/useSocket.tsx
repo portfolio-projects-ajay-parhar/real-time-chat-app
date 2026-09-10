@@ -7,6 +7,7 @@ import { resetPresenceStore } from "@/lib/presence-store";
 import { resetTypingStore } from "@/lib/typing-store";
 import { useTitleBadge } from "./useTitleBadge";
 import { useChatEvents } from "./useChatEvents";
+import { useNotifications } from "./useNotifications";
 
 const SocketContext = createContext<Socket | null>(null);
 
@@ -44,6 +45,7 @@ export function SocketProvider({
 
   useTitleBadge();
   useChatEvents(socket, viewerId);
+  useNotifications(socket, viewerId);
 
   return <SocketContext.Provider value={socket}>{children}</SocketContext.Provider>;
 }

@@ -3,6 +3,21 @@ export const ConversationTypeValues = ["DIRECT", "GROUP"] as const;
 export const MemberRoleValues = ["OWNER", "MEMBER"] as const;
 export const MessageTypeValues = ["TEXT", "IMAGE", "FILE", "SYSTEM"] as const;
 
+/**
+ * Attachment MIME allowlist — the ONE source of truth used by the REST
+ * upload route, the client-side pre-check and the ws send handler
+ * (defense in depth, PLAN §security).
+ */
+export const AttachmentMimeValues = [
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/gif",
+  "application/pdf",
+  "text/plain",
+] as const;
+export type AttachmentMime = (typeof AttachmentMimeValues)[number];
+
 export type ConversationType = (typeof ConversationTypeValues)[number];
 export type MemberRole = (typeof MemberRoleValues)[number];
 export type MessageType = (typeof MessageTypeValues)[number];

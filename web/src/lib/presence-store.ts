@@ -21,6 +21,8 @@ export interface PresenceEntry {
 type Listener = (snapshot: Record<string, PresenceEntry>) => void;
 
 const listeners = new Set<Listener>();
+/** Stable server-render snapshot — the store is empty until a socket event lands. */
+const EMPTY_SNAPSHOT: Record<string, PresenceEntry> = {};
 let presence: Record<string, PresenceEntry> = {};
 let snapshot: Record<string, PresenceEntry> = presence;
 
@@ -62,13 +64,18 @@ export function getPresenceSnapshot(): Record<string, PresenceEntry> {
   return snapshot;
 }
 
+/** Server snapshot (required for SSR) — no presence exists pre-hydration. */
+export function getPresenceServerSnapshot(): Record<string, PresenceEntry> {
+  return EMPTY_SNAPSHOT;
+}
+
 /** The whole presence map — use for GROUP "N online" counts (stable hook). */
 export function usePresenceMap(): Record<string, PresenceEntry> {
-  return useSyncExternalStore(subscribePresence, getPresenceSnapshot);
+  return useSyncExternalStore(subscribePresence, getPresenceSnapshot, getPresenceServerSnapshot);
 }
 
 /** Live presence of one user (undefined until the first event). */
 export function usePresence(userId: string): PresenceEntry | undefined {
-  const all = useSyncExternalStore(subscribePresence, getPresenceSnapshot);
+  const all = useSyncExternalStore(subscribePresence, getPresenceSnapshot, getPresenceServerSnapshot);
   return all[userId];
 }

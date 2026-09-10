@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { MessageTypeValues } from "./types.js";
+import { AttachmentMimeValues, MessageTypeValues } from "./types.js";
 
 // ---------- Shared primitives ----------
 export const conversationIdSchema = z.string().min(1).max(64);
@@ -10,7 +10,7 @@ export const attachmentSchema = z.object({
   key: z.string().min(1).max(512),
   name: z.string().min(1).max(255),
   size: z.number().int().positive().max(10 * 1024 * 1024),
-  mime: z.enum(["image/jpeg", "image/png", "image/webp", "image/gif", "application/pdf", "text/plain"]),
+  mime: z.enum(AttachmentMimeValues),
   width: z.number().int().positive().optional(),
   height: z.number().int().positive().optional(),
 });
