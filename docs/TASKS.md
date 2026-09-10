@@ -1,6 +1,6 @@
 # Real-Time Chat App — Agent Task List
 
-> **STATUS: IN PROGRESS (2026-09-09)** — Phases 1-7 complete.
+> **STATUS: IN PROGRESS (2026-09-10)** — Phases 1-8 complete.
 
 > Derived from [`PLAN.md`](./PLAN.md) and the individual files in the [`phases/`](./phases/) directory. Work through phases **in order** — each phase depends on the previous one. Mark `[/]` when in progress, `[x]` when done. Mirror progress to [`../tasks-progress.md`](../tasks-progress.md).
 
@@ -117,13 +117,22 @@
 
 ## Phase 8 — Chat UI Polish
 
-- [ ] `/new` — user directory with search → DM; group builder (name + multi-select members)
-- [ ] Group management sheet — members list, add (owner), remove (owner), leave; SYSTEM messages in timeline
-- [ ] Message actions — edit (own TEXT, ≤15 min, inline editor) / delete (tombstone) with socket-less REST + cache patch
-- [ ] Reply — quote banner in composer, `replyTo` preview in bubble, click scrolls to original (simple: no scroll, highlight if loaded)
-- [ ] Date separators; consecutive-message sender grouping (avatar/name on first only)
-- [ ] Markdown-lite renderer (bold/italic/inline code/links) + sanitized; link `rel="noopener"`
-- [ ] Desktop split view (list 320px | chat flex-1) + mobile full-screen swap; empty states
+- [x] `/new` — user directory with search → DM; group builder (name + multi-select members)
+- [x] Group management sheet — members list, add (owner), remove (owner), leave; SYSTEM messages in timeline
+- [x] Message actions — edit (own TEXT, ≤15 min, inline editor) / delete (tombstone) with socket-less REST + cache patch
+- [x] Reply — quote banner in composer, `replyTo` preview in bubble, click scrolls to original (simple: no scroll, highlight if loaded)
+- [x] Date separators; consecutive-message sender grouping (avatar/name on first only)
+- [x] Markdown-lite renderer (bold/italic/inline code/links) + sanitized; link `rel="noopener"`
+- [x] Desktop split view (list 320px | chat flex-1) + mobile full-screen swap; empty states
+
+### Phase 8 implementation notes
+- Reply is **fully realtime** — the Phase 6 `message:send` contract already carried `replyToId`; the composer quote banner + optimistic bubble with quote + quote-click scroll/highlight (no-op when the original isn't in the loaded pages) complete it.
+- Edit/delete are REST + pure cache patches per the phase scope note (`patchMessageEdited` also refreshes reply quotes); cross-client propagation is refetch-on-focus — `ChatView` explicitly invalidates history + detail on focus/visibility since global `refetchOnWindowFocus` is off. Socket propagation of edits deferred (event constants `MESSAGE_EDITED`/`MESSAGE_DELETED` already exist in `@chat/shared`).
+- Markdown-lite = pure `parseMarkdownLite` (`web/src/lib/markdown.ts`, unit-tested incl. XSS table) + React mapping (`markdown-lite.tsx`); allowlist only, no `dangerouslySetInnerHTML`; autolinks restricted to `http(s)` with `rel="noopener noreferrer"`.
+- Scroll-up pagination uses an IntersectionObserver on a top sentinel with viewport anchoring to the previously-first message (keyset cursor immune to live appends); "New messages ↓" pill appears when a `message:new` lands while scrolled up.
+- Split view: `(app)/layout.tsx` renders the desktop sidebar via `SidebarList`; mobile inbox and sidebar share the `["conversations"]` cache (`lib/queries.ts`).
+- Group mutations (add/remove/rename/leave) are REST; the persisted SYSTEM messages surface via invalidated caches, not sockets (same documented scope note as edit/delete). Last-owner leave → server 409 shown inline.
+- Verified: `npm run typecheck` green ×3, `next build` green (incl. `/new` route), 70 web unit tests green. Integration suites need Docker (offline this session) — re-run with compose up.
 
 ## Phase 9 — Notifications & File Sharing
 

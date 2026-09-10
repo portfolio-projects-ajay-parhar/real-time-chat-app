@@ -1,11 +1,18 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import type { ChatMessage } from "@chat/shared";
 import { Avatar } from "./Avatar";
 import { MessageBubble } from "./MessageBubble";
-import { isReadByWatermark, readersOf, type MessagesPage } from "@/lib/chat-cache";
+import {
+  canDeleteMessage,
+  canEditMessage,
+  isReadByWatermark,
+  readersOf,
+  type MessagesPage,
+} from "@/lib/chat-cache";
+import { dayLabel, shouldShowDateSeparator, shouldShowSender } from "@/lib/message-grouping";
 
 async function fetchMessagesPage(
   conversationId: string,
@@ -28,27 +35,37 @@ export interface MemberWatermark {
 }
 
 /**
- * Message history — keyset-paginated upward (the "Load older" control pages
- * back with the cursor of the oldest loaded message, immune to live appends).
- * Auto-scrolls to the newest message when already near the bottom, reports
- * scroll position + newest message upward (auto read-marking inputs), and
- * renders read receipts: ✓✓ per own bubble (DIRECT) and "Seen by N/M" under
- * the newest own message (GROUP).
+ * Message history — keyset-paginated UPWARD via an IntersectionObserver on a
+ * top sentinel (auto "load older"), with the scroll anchored to the
+ * previously-first message so prepending a page never jumps the viewport.
+ * Renders date separators + consecutive-sender grouping, auto-sticks to the
+ * bottom when already there, shows a "New messages ↓" pill when a live
+ * message lands while scrolled up, and reports scroll position + newest
+ * message upward for auto read-marking.
  */
 export function MessageList({
   conversationId,
   viewerId,
   type = "DIRECT",
   otherWatermarks = [],
+  myRole = "MEMBER",
   onNearBottomChange,
   onNewestChange,
+  onReply,
+  onEdit,
+  onDelete,
 }: {
   conversationId: string;
   viewerId: string;
   type?: "DIRECT" | "GROUP";
   otherWatermarks?: MemberWatermark[];
+  /** Viewer's role in this conversation — GROUP owners can delete any message. */
+  myRole?: "OWNER" | "MEMBER";
   onNearBottomChange?: (near: boolean) => void;
   onNewestChange?: (createdAt: string | null) => void;
+  onReply: (message: ChatMessage) => void;
+  onEdit: (messageId: string, body: string) => void;
+  onDelete: (messageId: string) => void;
 }) {
   const { data, isLoading, isError, fetchNextPage, hasNextPage, isFetchingNextPage } =
     useInfiniteQuery({
@@ -59,7 +76,13 @@ export function MessageList({
     });
 
   const scrollRef = useRef<HTMLDivElement>(null);
+  const sentinelRef = useRef<HTMLDivElement>(null);
   const nearBottomRef = useRef(true);
+  /** Where the viewport was anchored before an older page prepended. */
+  const anchorRef = useRef<{ id: string; top: number } | null>(null);
+  const lastSeenIdRef = useRef<string | null>(null);
+  const [newPill, setNewPill] = useState(false);
+  const [highlightId, setHighlightId] = useState<string | null>(null);
 
   // Pages are fetched newest-first; chronological order = reversed pages.
   const messages: ChatMessage[] = [...(data?.pages ?? [])]
@@ -76,14 +99,88 @@ export function MessageList({
   // Reset the scroll anchor when switching conversations.
   useEffect(() => {
     nearBottomRef.current = true;
+    lastSeenIdRef.current = null;
+    setNewPill(false);
     onNearBottomChange?.(true);
   }, [conversationId, onNearBottomChange]);
 
+  // Auto-stick to the newest message when already near the bottom.
   useEffect(() => {
     if (nearBottomRef.current && scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [lastId, conversationId]);
+
+  // Live message landed while scrolled up → "New messages ↓" pill.
+  useEffect(() => {
+    if (!lastId) return;
+    if (nearBottomRef.current) {
+      lastSeenIdRef.current = lastId;
+    } else if (lastId !== lastSeenIdRef.current) {
+      setNewPill(true);
+    }
+  }, [lastId]);
+
+  /** Start an upward page fetch, anchoring the viewport to the first message. */
+  const fetchOlder = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el || !hasNextPage || isFetchingNextPage) return;
+    const first = el.querySelector<HTMLElement>("[data-message-id]");
+    anchorRef.current = first?.dataset.messageId
+      ? { id: first.dataset.messageId, top: first.getBoundingClientRect().top }
+      : null;
+    void fetchNextPage();
+  }, [fetchNextPage, hasNextPage, isFetchingNextPage]);
+
+  // After the prepend, restore the anchor message's viewport position.
+  useEffect(() => {
+    const el = scrollRef.current;
+    const anchor = anchorRef.current;
+    if (!el || !anchor || isFetchingNextPage) return;
+    const target = el.querySelector<HTMLElement>(`[data-message-id="${anchor.id}"]`);
+    if (target) el.scrollTop += target.getBoundingClientRect().top - anchor.top;
+    anchorRef.current = null;
+  }, [data, isFetchingNextPage]);
+
+  // IntersectionObserver on the top sentinel — upward infinite scroll.
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    const root = scrollRef.current;
+    if (!sentinel || !root || !hasNextPage) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) fetchOlder();
+      },
+      { root, rootMargin: "240px" }
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hasNextPage, fetchOlder]);
+
+  /** Click on a reply quote → scroll to the original + flash highlight. */
+  const jumpToMessage = useCallback((messageId: string) => {
+    const el = scrollRef.current;
+    const target = el?.querySelector<HTMLElement>(`[data-message-id="${messageId}"]`);
+    if (!el || !target) return; // not in the loaded pages — no-op (phase 8 scope)
+    target.scrollIntoView({ block: "center", behavior: "smooth" });
+    setHighlightId(messageId);
+  }, []);
+
+  useEffect(() => {
+    if (!highlightId) return;
+    const timer = setTimeout(() => setHighlightId(null), 1600);
+    return () => clearTimeout(timer);
+  }, [highlightId]);
+
+  const scrollToBottom = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
+    nearBottomRef.current = true;
+    lastSeenIdRef.current = lastId ?? null;
+    setNewPill(false);
+    onNearBottomChange?.(true);
+  }, [lastId, onNearBottomChange]);
 
   // Newest own, persisted, visible message — the GROUP "Seen by N" anchor.
   let lastOwnIdx = -1;
@@ -111,73 +208,100 @@ export function MessageList({
   }
 
   return (
-    <div
-      ref={scrollRef}
-      onScroll={(e) => {
-        const el = e.currentTarget;
-        const near = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
-        if (near !== nearBottomRef.current) {
-          nearBottomRef.current = near;
-          onNearBottomChange?.(near);
-        }
-      }}
-      className="flex-1 space-y-3 overflow-y-auto px-4 py-4"
-    >
-      {hasNextPage && (
-        <div className="flex justify-center pb-2">
-          <button
-            onClick={() => void fetchNextPage()}
-            disabled={isFetchingNextPage}
-            className="rounded-full bg-zinc-800 px-3 py-1 text-xs text-zinc-300 hover:bg-zinc-700 disabled:opacity-50"
-          >
-            {isFetchingNextPage ? "Loading…" : "Load older messages"}
-          </button>
+    <div className="relative flex min-h-0 flex-1 flex-col">
+      <div
+        ref={scrollRef}
+        onScroll={(e) => {
+          const el = e.currentTarget;
+          const near = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+          if (near) lastSeenIdRef.current = lastId ?? null;
+          if (near && newPill) setNewPill(false);
+          if (near !== nearBottomRef.current) {
+            nearBottomRef.current = near;
+            onNearBottomChange?.(near);
+          }
+        }}
+        className="flex-1 space-y-2 overflow-y-auto px-4 py-4"
+      >
+        <div ref={sentinelRef} className="flex h-8 items-center justify-center">
+          {isFetchingNextPage && <span className="text-xs text-zinc-500">Loading older…</span>}
         </div>
-      )}
-      {messages.length === 0 && (
-        <div className="flex h-full items-center justify-center text-sm text-zinc-500">
-          No messages yet — say hi 👋
-        </div>
-      )}
-      {messages.map((m, i) => {
-        const prev = messages[i - 1];
-        const showSender =
-          !prev ||
-          prev.senderId !== m.senderId ||
-          prev.type === "SYSTEM" ||
-          new Date(m.createdAt).getTime() - new Date(prev.createdAt).getTime() > 5 * 60_000;
-        const own = m.senderId === viewerId;
-        // DIRECT: individual ✓✓ ticks from the other member's watermark.
-        // GROUP: plain ✓ per bubble; the aggregate "Seen by N" line below.
-        const read =
-          own && type === "DIRECT" && !m.pending && !m.failed
-            ? otherWatermarks.some((w) => isReadByWatermark(m.createdAt, w.lastReadAt))
-            : undefined;
-        return (
-          <div key={m.id}>
-            <MessageBubble
-              message={m}
-              viewerId={viewerId}
-              showSender={showSender}
-              read={read}
-            />
-            {i === lastOwnIdx && lastOwnReaders.length > 0 && (
-              <div className="mt-0.5 flex items-center justify-end gap-1 pr-10">
-                <span className="text-[10px] text-zinc-500">
-                  Seen by {lastOwnReaders.length}/{otherWatermarks.length}
-                </span>
-                <span className="flex">
-                  {lastOwnReaders.slice(0, 5).map((w) => (
-                    <span key={w.userId} className="-ml-1 first:ml-0">
-                      <Avatar name={w.name} imageKey={w.image} size={14} />
-                    </span>
-                  ))}
-                </span>
-              </div>
-            )}
+        {messages.length === 0 && (
+          <div className="flex h-full items-center justify-center text-sm text-zinc-500">
+            No messages yet — say hi 👋
           </div>
-        );
-      })}
+        )}
+        {messages.map((m, i) => {
+          const prev = messages[i - 1];
+          const showDate = shouldShowDateSeparator(prev?.createdAt, m.createdAt);
+          const showSender = shouldShowSender(prev, m);
+          const own = m.senderId === viewerId;
+          // DIRECT: individual ✓✓ ticks from the other member's watermark.
+          // GROUP: plain ✓ per bubble; the aggregate "Seen by N" line below.
+          const read =
+            own && type === "DIRECT" && !m.pending && !m.failed
+              ? otherWatermarks.some((w) => isReadByWatermark(m.createdAt, w.lastReadAt))
+              : undefined;
+          return (
+            <div
+              key={m.id}
+              data-message-id={m.id}
+              className={
+                highlightId === m.id
+                  ? "rounded-xl bg-indigo-500/10 ring-1 ring-indigo-500/40 transition-colors"
+                  : undefined
+              }
+            >
+              {showDate && (
+                <div className="my-3 flex items-center gap-3" aria-hidden>
+                  <span className="h-px flex-1 bg-zinc-800" />
+                  <span className="text-[10px] font-medium uppercase tracking-wide text-zinc-500">
+                    {dayLabel(m.createdAt)}
+                  </span>
+                  <span className="h-px flex-1 bg-zinc-800" />
+                </div>
+              )}
+              <div className="pt-1">
+                <MessageBubble
+                  message={m}
+                  viewerId={viewerId}
+                  showSender={showSender}
+                  read={read}
+                  canEdit={canEditMessage(m, viewerId)}
+                  canDelete={canDeleteMessage(m, viewerId, myRole)}
+                  onReply={onReply}
+                  onEdit={onEdit}
+                  onDelete={onDelete}
+                  onJumpToMessage={jumpToMessage}
+                />
+              </div>
+              {i === lastOwnIdx && lastOwnReaders.length > 0 && (
+                <div className="mt-0.5 flex items-center justify-end gap-1 pr-10">
+                  <span className="text-[10px] text-zinc-500">
+                    Seen by {lastOwnReaders.length}/{otherWatermarks.length}
+                  </span>
+                  <span className="flex">
+                    {lastOwnReaders.slice(0, 5).map((w) => (
+                      <span key={w.userId} className="-ml-1 first:ml-0">
+                        <Avatar name={w.name} imageKey={w.image} size={14} />
+                      </span>
+                    ))}
+                  </span>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      {newPill && (
+        <button
+          type="button"
+          onClick={scrollToBottom}
+          className="absolute bottom-3 left-1/2 z-10 -translate-x-1/2 rounded-full bg-indigo-600 px-3 py-1 text-xs font-medium text-white shadow-lg hover:bg-indigo-500"
+        >
+          New messages ↓
+        </button>
+      )}
     </div>
   );
 }

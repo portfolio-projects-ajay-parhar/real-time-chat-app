@@ -307,3 +307,66 @@ export function unreadBadge(conv: Pick<InboxConversation, "unread" | "isMuted">)
   if (conv.unread <= 0) return { kind: "none" };
   return conv.isMuted ? { kind: "dot" } : { kind: "count", count: conv.unread };
 }
+
+// ---------- Message edit/delete (Phase 8 — REST + cache patch) ----------
+
+/** Mirrors the server's EDIT_WINDOW_MS in PATCH /api/messages/[id]. */
+export const EDIT_WINDOW_MS = 15 * 60_000;
+
+/**
+ * Edit permission (own TEXT, ≤15 min, not deleted/failed/in flight) — kept in
+ * sync with the server-side checks; the server remains the authority.
+ */
+export function canEditMessage(
+  m: Pick<ChatMessage, "senderId" | "type" | "deletedAt" | "createdAt" | "pending" | "failed">,
+  viewerId: string,
+  now = Date.now()
+): boolean {
+  if (m.senderId !== viewerId || m.type !== "TEXT") return false;
+  if (m.deletedAt || m.pending || m.failed) return false;
+  return now - new Date(m.createdAt).getTime() <= EDIT_WINDOW_MS;
+}
+
+/** Delete: sender or a GROUP owner (server enforces; UI mirrors for the menu). */
+export function canDeleteMessage(
+  m: Pick<ChatMessage, "senderId" | "deletedAt" | "pending">,
+  viewerId: string,
+  myRole: "OWNER" | "MEMBER"
+): boolean {
+  if (m.pending || m.deletedAt) return false;
+  return m.senderId === viewerId || myRole === "OWNER";
+}
+
+/**
+ * PATCH /api/messages/[id] success → patch the history cache. Also refreshes
+ * the quoted snippet in any bubble replying to the edited message.
+ */
+export function patchMessageEdited(
+  pages: MessagesPage[],
+  messageId: string,
+  body: string,
+  editedAt: string
+): MessagesPage[] {
+  return pages.map((page) => ({
+    ...page,
+    messages: page.messages.map((m) => {
+      if (m.id === messageId) return { ...m, body, editedAt };
+      if (m.replyTo?.id === messageId) {
+        return { ...m, replyTo: { ...m.replyTo, body } };
+      }
+      return m;
+    }),
+  }));
+}
+
+/** DELETE /api/messages/[id] success — flip the row to a tombstone in place. */
+export function patchMessageDeleted(
+  pages: MessagesPage[],
+  messageId: string,
+  deletedAt: string
+): MessagesPage[] {
+  return pages.map((page) => ({
+    ...page,
+    messages: page.messages.map((m) => (m.id === messageId ? { ...m, deletedAt } : m)),
+  }));
+}

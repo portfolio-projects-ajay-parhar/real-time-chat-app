@@ -1,22 +1,29 @@
 "use client";
 
-import { useCallback, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useCallback, useEffect, useState } from "react";
+import { useQuery, useQueryClient, type InfiniteData } from "@tanstack/react-query";
+import type { ChatMessage } from "@chat/shared";
 import Link from "next/link";
 import { Avatar } from "./Avatar";
 import { Composer } from "./Composer";
 import { MessageList } from "./MessageList";
 import { TypingDots } from "./TypingDots";
+import { GroupMembersSheet } from "./GroupMembersSheet";
 import { useTypingUsers } from "@/lib/typing-store";
 import { usePresenceMap } from "@/lib/presence-store";
 import { isRecentLastSeen, relativeLastSeen } from "@/lib/relative-time";
-import type { ConversationDetail } from "@/lib/chat-cache";
+import {
+  patchMessageDeleted,
+  patchMessageEdited,
+  type ConversationDetail,
+  type MessagesPage,
+} from "@/lib/chat-cache";
 import { useAutoRead } from "@/hooks/useAutoRead";
 
 /**
- * The chat view — header (title + live presence/typing indicator), message
- * history with read receipts, composer with auto read-marking. Group
- * management, replies, edit/delete arrive in Phase 8.
+ * The chat view — header (title + live presence/typing indicator + group
+ * members sheet), message history with receipts, date separators, reply/
+ * edit/delete actions and the composer with reply banner + auto read-marking.
  */
 export function ChatView({
   conversationId,
@@ -25,6 +32,7 @@ export function ChatView({
   conversationId: string;
   viewerId: string;
 }) {
+  const queryClient = useQueryClient();
   const { data } = useQuery({
     queryKey: ["conversation", conversationId],
     queryFn: async (): Promise<ConversationDetail> => {
@@ -38,9 +46,102 @@ export function ChatView({
   // Auto read-marking inputs, reported by MessageList.
   const [nearBottom, setNearBottom] = useState(true);
   const [newestMessageAt, setNewestMessageAt] = useState<string | null>(null);
+  const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
+  const [membersOpen, setMembersOpen] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
   const onNearBottomChange = useCallback((near: boolean) => setNearBottom(near), []);
   const onNewestChange = useCallback((createdAt: string | null) => setNewestMessageAt(createdAt), []);
   useAutoRead(conversationId, viewerId, { nearBottom, newestMessageAt });
+
+  const myRole = data?.members.find((m) => m.id === viewerId)?.role ?? "MEMBER";
+
+  // Edit — REST PATCH + pure cache patch (sender, TEXT, ≤15 min enforced
+  // server-side; the server response is the patch source of truth).
+  const handleEdit = useCallback(
+    async (messageId: string, body: string) => {
+      setActionError(null);
+      try {
+        const res = await fetch(`/api/messages/${messageId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ body }),
+        });
+        const payload: unknown = await res.json().catch(() => null);
+        const raw = (payload as { message?: unknown } | null)?.message;
+        const edited =
+          raw && typeof raw === "object"
+            ? (raw as { id?: string; body?: string; editedAt?: string | null })
+            : null;
+        if (!res.ok || !edited?.id || typeof edited.body !== "string" || !edited.editedAt) {
+          throw new Error(
+            typeof raw === "string" && raw ? raw : "Could not edit the message"
+          );
+        }
+        queryClient.setQueryData<InfiniteData<MessagesPage>>(
+          ["messages", conversationId],
+          (prev) =>
+            prev && edited.editedAt
+              ? {
+                  ...prev,
+                  pages: patchMessageEdited(prev.pages, edited.id!, edited.body!, edited.editedAt!),
+                }
+              : prev
+        );
+      } catch (err) {
+        setActionError(err instanceof Error ? err.message : "Could not edit the message");
+      }
+    },
+    [conversationId, queryClient]
+  );
+
+  // Delete — soft delete + tombstone patch (server allows sender or OWNER).
+  const handleDelete = useCallback(
+    async (messageId: string) => {
+      if (!window.confirm("Delete this message?")) return;
+      setActionError(null);
+      try {
+        const res = await fetch(`/api/messages/${messageId}`, { method: "DELETE" });
+        const payload: unknown = await res.json().catch(() => null);
+        const raw = (payload as { message?: unknown } | null)?.message;
+        const deleted =
+          raw && typeof raw === "object"
+            ? (raw as { id?: string; deletedAt?: string | null })
+            : null;
+        if (!res.ok || !deleted?.id || !deleted.deletedAt) {
+          throw new Error(
+            typeof raw === "string" && raw ? raw : "Could not delete the message"
+          );
+        }
+        queryClient.setQueryData<InfiniteData<MessagesPage>>(
+          ["messages", conversationId],
+          (prev) =>
+            prev && deleted.deletedAt
+              ? { ...prev, pages: patchMessageDeleted(prev.pages, deleted.id!, deleted.deletedAt!) }
+              : prev
+        );
+      } catch (err) {
+        setActionError(err instanceof Error ? err.message : "Could not delete the message");
+      }
+    },
+    [conversationId, queryClient]
+  );
+
+  // Edit/delete/rename/SYSTEM-message propagation to THIS client happens on
+  // refetch: global refetchOnWindowFocus is off, so the phase-8 scope's
+  // "re-fetches on focus" is an explicit invalidate on focus/visibility.
+  useEffect(() => {
+    const refetch = () => {
+      if (document.visibilityState === "hidden") return;
+      void queryClient.invalidateQueries({ queryKey: ["messages", conversationId] });
+      void queryClient.invalidateQueries({ queryKey: ["conversation", conversationId] });
+    };
+    window.addEventListener("focus", refetch);
+    document.addEventListener("visibilitychange", refetch);
+    return () => {
+      window.removeEventListener("focus", refetch);
+      document.removeEventListener("visibilitychange", refetch);
+    };
+  }, [conversationId, queryClient]);
 
   const typingUserIds = useTypingUsers(conversationId).filter((id) => id !== viewerId);
   const typingNames = (data?.members ?? [])
@@ -80,11 +181,11 @@ export function ChatView({
     .map((m) => ({ userId: m.id, name: m.user.name, image: m.user.image, lastReadAt: m.lastReadAt }));
 
   return (
-    <div className="mx-auto flex h-dvh max-w-2xl flex-col">
+    <div className="flex h-full min-h-0 w-full flex-col">
       <header className="flex items-center gap-3 border-b border-zinc-800 px-4 py-3">
         <Link
           href="/conversations"
-          className="rounded-full bg-zinc-800 px-2 py-1 text-xs text-zinc-300 hover:bg-zinc-700"
+          className="rounded-full bg-zinc-800 px-2 py-1 text-xs text-zinc-300 hover:bg-zinc-700 md:hidden"
           aria-label="Back to chats"
         >
           ←
@@ -118,17 +219,53 @@ export function ChatView({
             </div>
           )}
         </div>
+        {data?.type === "GROUP" && (
+          <button
+            type="button"
+            onClick={() => setMembersOpen(true)}
+            aria-label="Group members"
+            className="rounded-full bg-zinc-800 px-2 py-1 text-xs text-zinc-300 hover:bg-zinc-700"
+          >
+            👥 {data.members.length}
+          </button>
+        )}
       </header>
+
+      {actionError && (
+        <div className="px-4 pt-2" role="alert">
+          <div className="rounded-md bg-red-500/10 px-3 py-1.5 text-xs text-red-400">
+            {actionError}
+          </div>
+        </div>
+      )}
 
       <MessageList
         conversationId={conversationId}
         viewerId={viewerId}
         type={data?.type ?? "DIRECT"}
         otherWatermarks={otherWatermarks}
+        myRole={myRole}
         onNearBottomChange={onNearBottomChange}
         onNewestChange={onNewestChange}
+        onReply={setReplyTo}
+        onEdit={(id, body) => void handleEdit(id, body)}
+        onDelete={(id) => void handleDelete(id)}
       />
-      <Composer conversationId={conversationId} viewerId={viewerId} />
+      <Composer
+        conversationId={conversationId}
+        viewerId={viewerId}
+        replyTo={replyTo}
+        onCancelReply={() => setReplyTo(null)}
+      />
+
+      {data?.type === "GROUP" && (
+        <GroupMembersSheet
+          conversation={data}
+          viewerId={viewerId}
+          open={membersOpen}
+          onClose={() => setMembersOpen(false)}
+        />
+      )}
     </div>
   );
 }

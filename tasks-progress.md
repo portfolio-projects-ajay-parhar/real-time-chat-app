@@ -3,7 +3,7 @@
 > Mirror of [`docs/TASKS.md`](./docs/TASKS.md). Tick boxes as each item completes. The "BUILD PASSING" line at the bottom is updated once typecheck + tests + build run clean.
 
 ## Status
-**IN PROGRESS** — Phases 1-7 complete (2026-09-09). Prerequisites: Docker (Postgres + Redis), optional Supabase/Upstash for prod, S3/Cloudinary keys for attachments (local provider works without).
+**IN PROGRESS** — Phases 1-8 complete (2026-09-10). Prerequisites: Docker (Postgres + Redis), optional Supabase/Upstash for prod, S3/Cloudinary keys for attachments (local provider works without).
 
 ## Prerequisites
 - [x] Node.js ≥ 20 (v24), npm ≥ 10 (v11), Docker + compose (Postgres + Redis healthy via `sg docker`)
@@ -102,12 +102,15 @@
 > **Implementation notes (Phase 7):** Read pipeline order: DB watermark → Redis `HDEL` → `receipt:update` (conversation room) → `unread:update {count: 0}` (reader's user room) — the zero-count push is what clears badges on the reader's OTHER devices; the reading device also patches optimistically on the ack. Watermark cache patches are forward-only so out-of-order adapter delivery can't regress them. Auto-read guard chain: visible tab → nearBottom → not-already-read → emit (idle open chats write nothing). Presence is a `useSyncExternalStore` module store fed only by `presence:update`; REST snapshots are the initial state. "Seen by N/M" anchors on the newest own persisted non-deleted message; individual ✓✓ ticks stay DIRECT-only per PLAN §7.2.
 
 ## Phase 8 — Chat UI Polish
-- [ ] `/new`: directory DM flow + group builder (name + multi-select)
-- [ ] Group management sheet (add/remove/rename/leave, SYSTEM messages in timeline)
-- [ ] Edit (inline, ≤15 min) / delete (tombstone) / reply (quote banner + quoted bubble) — REST + cache patch
-- [ ] Rendering: date separators, sender grouping, scroll-up pagination, "new messages ↓" pill
-- [ ] Markdown-lite (bold/italic/code/autolink) + XSS payload tests
-- [ ] Desktop split view + mobile swap + empty states
+- [x] `/new`: directory DM flow (debounced `GET /api/users?q=` → `POST {type: DIRECT}` → push to chat; advisory-lock dedupe makes repeats idempotent) + group builder (name + multi-select chips → `POST {type: GROUP}`)
+- [x] Group management sheet (phase 8.2): members with role chips + presence dots, OWNER add/remove/rename, leave; last-owner 409 rendered as an inline hint; actions invalidate conversation/inbox/history caches so the persisted SYSTEM messages land in the timeline
+- [x] Edit (own TEXT, ≤15 min, inline editor — Enter saves / Esc cancels, `editedAt` marker) / delete (sender or OWNER → tombstone "Message deleted") / reply (composer quote banner, `replyToId` through the realtime `message:send` pipeline, quoted preview click → scroll + flash highlight) — edit/delete are REST + pure cache patches per the phase scope note
+- [x] Rendering: date separators (Today/Yesterday/localized), sender grouping (5-min window, SYSTEM resets, avatar+name on first only), IntersectionObserver upward pagination with scroll anchoring (no jump on prepend), "New messages ↓" pill when live messages land while scrolled up
+- [x] Markdown-lite (bold/italic/inline code/http(s) autolink → React nodes, `rel="noopener noreferrer"`, NO raw HTML/`dangerouslySetInnerHTML`) + XSS payload test table
+- [x] Desktop split view (`320px sidebar list | chat`) via shared `SidebarList` in `(app)/layout.tsx`; mobile full-screen list ↔ chat swap with back button (route-driven); empty states (no chats → CTA to `/new`; no messages → "Say hi 👋"; desktop inbox pane → "Select a conversation")
+- [x] Unit tests (`web/test/markdown.test.ts` 16, `web/test/message-grouping.test.ts` 9, `web/test/message-actions.test.ts` 7): transform table + XSS payloads (`<script>`, `javascript:`, `data:` render inert), day-separator/5-min-grouping tables, `canEditMessage` boundary (exactly 15 min editable), `canDeleteMessage` owner rules, `patchMessageEdited` (incl. reply-quote refresh) / `patchMessageDeleted`
+
+> **Implementation notes (Phase 8):** Edit/delete propagation to OTHER clients is refetch-driven per the phase-8 scope note: global `refetchOnWindowFocus` is off, so `ChatView` explicitly invalidates history + detail on window focus/visibility (B sees A's edit/tombstone after refocusing; socket propagation of edits is a listed future improvement, and the `MESSAGE_EDITED`/`MESSAGE_DELETED` event constants already exist in `@chat/shared`). The markdown parser is a pure `parseMarkdownLite` in `markdown.ts` (unit-tested); the React mapping lives in `markdown-lite.tsx` — opening `*`/`**` must not be followed by whitespace and closing runs prefer the last asterisk (`**a *b***` nests correctly); adjacent `**` can never form an empty node. Reply is fully realtime (`message:send` already accepted `replyToId` since Phase 6); optimistic reply bubbles carry the quote. Mobile inbox + desktop sidebar share one `["conversations"]` cache (`lib/queries.ts`), so socket patches hit both. SYSTEM messages from REST group mutations are NOT socket-pushed (same scope note) — they appear on invalidation/refetch.
 
 ## Phase 9 — Notifications & File Sharing
 - [ ] Browser notifications (gesture-gated permission, hidden-tab/inactive-conversation only, click-to-navigate, mute-aware)
@@ -124,4 +127,4 @@
 
 ---
 
-**BUILD PASSING:** ✅ typecheck green ×3 (shared/ws/web); lint green; web build green; ws build green; unit suites green (web 48/48 incl. 18 new receipt tests, ws unit); integration suites green (presence 4/4, messaging 8/8, receipts 6/6 — two instances, real Redis/Postgres); Phase 6 live manual test + Phase 7 read receipts verified via suites (2026-09-09, Phase 7 complete)
+**BUILD PASSING:** ✅ typecheck green ×3 (shared/ws/web); web build green (`next build`, incl. `/new`); unit suites green (web 70 unit tests incl. 32 new Phase 8 tests: markdown + XSS table, grouping, edit/delete reducers; ws unit); Phase 8 UI shipped (split view, /new, group sheet, edit/delete/reply, markdown-lite, date separators, scroll-up pagination). Integration suites (presence/messaging/receipts/keyset) verified in earlier phases — require Docker Postgres+Redis, which was offline during the Phase 8 session; re-run `npm run test -w ws -w web` once Docker is up (2026-09-10, Phase 8 complete)

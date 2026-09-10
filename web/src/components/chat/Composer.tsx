@@ -17,9 +17,14 @@ const TYPING_SEND_THROTTLE_MS = 2_000; // server broadcasts at most 1/2s anyway
 export function Composer({
   conversationId,
   viewerId,
+  replyTo,
+  onCancelReply,
 }: {
   conversationId: string;
   viewerId: string;
+  /** Message being replied to — renders the quote banner, send carries replyToId. */
+  replyTo: ChatMessage | null;
+  onCancelReply: () => void;
 }) {
   const socket = useSocket();
   const queryClient = useQueryClient();
@@ -66,8 +71,16 @@ export function Composer({
       attachmentWidth: null,
       attachmentHeight: null,
       clientId,
-      replyToId: null,
-      replyTo: null,
+      replyToId: replyTo?.id ?? null,
+      replyTo: replyTo
+        ? {
+            id: replyTo.id,
+            type: replyTo.type,
+            body: replyTo.body,
+            senderId: replyTo.senderId,
+            sender: replyTo.sender,
+          }
+        : null,
       createdAt: new Date().toISOString(),
       editedAt: null,
       deletedAt: null,
@@ -81,11 +94,12 @@ export function Composer({
       )
     );
     setValue("");
+    onCancelReply();
     sendTyping("stop");
 
     socket.emit(
       C2S.MESSAGE_SEND,
-      { conversationId, clientId, type: "TEXT", body },
+      { conversationId, clientId, type: "TEXT", body, replyToId: replyTo?.id },
       (ack: MessageSendAck) => {
         if (ack.ok) {
           // Ack swap — replaces the pending bubble by clientId.
@@ -121,6 +135,26 @@ export function Composer({
 
   return (
     <div className="border-t border-zinc-800 p-3">
+      {replyTo && (
+        <div className="mb-2 flex items-start gap-2 rounded-lg border-l-2 border-indigo-500 bg-zinc-800/60 px-3 py-1.5">
+          <div className="min-w-0 flex-1 text-xs">
+            <span className="block font-medium text-indigo-300">
+              Replying to {replyTo.sender?.name ?? (replyTo.senderId === viewerId ? "yourself" : "Unknown")}
+            </span>
+            <span className="line-clamp-1 text-zinc-400">
+              {replyTo.body ?? `[${replyTo.type.toLowerCase()}]`}
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={onCancelReply}
+            aria-label="Cancel reply"
+            className="rounded px-1 text-zinc-500 hover:text-zinc-200"
+          >
+            ✕
+          </button>
+        </div>
+      )}
       {error && (
         <div className="mb-2 rounded-md bg-red-500/10 px-3 py-1.5 text-xs text-red-400" role="alert">
           {error}

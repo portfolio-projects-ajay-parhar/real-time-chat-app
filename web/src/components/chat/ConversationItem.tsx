@@ -31,9 +31,12 @@ function previewText(conv: InboxConversation, viewerId: string): string {
 export function ConversationItem({
   conversation,
   viewerId,
+  active = false,
 }: {
   conversation: InboxConversation;
   viewerId: string;
+  /** Currently-open chat (desktop split view highlight). */
+  active?: boolean;
 }) {
   const title = conversationTitle(conversation, viewerId);
   const other =
@@ -44,7 +47,9 @@ export function ConversationItem({
   return (
     <Link
       href={`/conversations/${conversation.id}`}
-      className="flex items-center gap-3 rounded-lg px-3 py-3 hover:bg-zinc-800/60"
+      className={`flex items-center gap-3 rounded-lg px-3 py-3 hover:bg-zinc-800/60 ${
+        active ? "bg-zinc-800" : ""
+      }`}
     >
       <Avatar
         name={title}
