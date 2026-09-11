@@ -96,11 +96,18 @@ export function MessageList({
     onNewestChange?.(newestMessageAt);
   }, [newestMessageAt, onNewestChange]);
 
-  // Reset the scroll anchor when switching conversations.
+  // Reset the scroll state when switching conversations. The new-pill reset
+  // happens via the render-time "adjust state on prop change" pattern (the
+  // React-recommended alternative to setState-in-effect); refs and the
+  // parent callback stay in the effect.
+  const [prevConvId, setPrevConvId] = useState(conversationId);
+  if (prevConvId !== conversationId) {
+    setPrevConvId(conversationId);
+    setNewPill(false);
+  }
   useEffect(() => {
     nearBottomRef.current = true;
     lastSeenIdRef.current = null;
-    setNewPill(false);
     onNearBottomChange?.(true);
   }, [conversationId, onNearBottomChange]);
 
@@ -172,7 +179,7 @@ export function MessageList({
     return () => clearTimeout(timer);
   }, [highlightId]);
 
-  const scrollToBottom = useCallback(() => {
+  const scrollToBottom = () => {
     const el = scrollRef.current;
     if (!el) return;
     el.scrollTop = el.scrollHeight;
@@ -180,7 +187,7 @@ export function MessageList({
     lastSeenIdRef.current = lastId ?? null;
     setNewPill(false);
     onNearBottomChange?.(true);
-  }, [lastId, onNearBottomChange]);
+  };
 
   // Newest own, persisted, visible message — the GROUP "Seen by N" anchor.
   let lastOwnIdx = -1;
@@ -221,14 +228,17 @@ export function MessageList({
             onNearBottomChange?.(near);
           }
         }}
-        className="flex-1 space-y-2 overflow-y-auto px-4 py-4"
+                className="chat-bg chat-scroll flex-1 overflow-y-auto px-4 py-4"
       >
         <div ref={sentinelRef} className="flex h-8 items-center justify-center">
           {isFetchingNextPage && <span className="text-xs text-zinc-500">Loading older…</span>}
         </div>
         {messages.length === 0 && (
-          <div className="flex h-full items-center justify-center text-sm text-zinc-500">
-            No messages yet — say hi 👋
+          <div className="flex h-full flex-col items-center justify-center gap-2 text-sm text-zinc-500">
+            <span className="text-3xl" aria-hidden>
+              👋
+            </span>
+            <span>No messages yet — say hi</span>
           </div>
         )}
         {messages.map((m, i) => {
@@ -242,39 +252,41 @@ export function MessageList({
             own && type === "DIRECT" && !m.pending && !m.failed
               ? otherWatermarks.some((w) => isReadByWatermark(m.createdAt, w.lastReadAt))
               : undefined;
+          // Consecutive same-sender messages tuck together; a new sender (or
+          // a date separator) gets breathing room.
+          const rowSpacing = i === 0 ? "" : showDate ? "mt-4" : showSender ? "mt-3" : "mt-0.5";
           return (
             <div
               key={m.id}
               data-message-id={m.id}
-              className={
+              className={`msg-in rounded-xl ${
+                rowSpacing
+              } ${
                 highlightId === m.id
-                  ? "rounded-xl bg-indigo-500/10 ring-1 ring-indigo-500/40 transition-colors"
+                  ? "bg-indigo-500/10 ring-1 ring-indigo-500/40 transition-colors"
                   : undefined
-              }
+              }`}
             >
               {showDate && (
-                <div className="my-3 flex items-center gap-3" aria-hidden>
-                  <span className="h-px flex-1 bg-zinc-800" />
-                  <span className="text-[10px] font-medium uppercase tracking-wide text-zinc-500">
+                <div className="mb-3 flex justify-center" aria-hidden>
+                  <span className="rounded-full bg-zinc-800/70 px-3 py-1 text-[10px] font-medium uppercase tracking-wide text-zinc-400 ring-1 ring-white/5">
                     {dayLabel(m.createdAt)}
                   </span>
-                  <span className="h-px flex-1 bg-zinc-800" />
                 </div>
               )}
-              <div className="pt-1">
-                <MessageBubble
-                  message={m}
-                  viewerId={viewerId}
-                  showSender={showSender}
-                  read={read}
-                  canEdit={canEditMessage(m, viewerId)}
-                  canDelete={canDeleteMessage(m, viewerId, myRole)}
-                  onReply={onReply}
-                  onEdit={onEdit}
-                  onDelete={onDelete}
-                  onJumpToMessage={jumpToMessage}
-                />
-              </div>
+              <MessageBubble
+                message={m}
+                viewerId={viewerId}
+                showSender={showSender}
+                grouped={!showDate && !showSender}
+                read={read}
+                canEdit={canEditMessage(m, viewerId)}
+                canDelete={canDeleteMessage(m, viewerId, myRole)}
+                onReply={onReply}
+                onEdit={onEdit}
+                onDelete={onDelete}
+                onJumpToMessage={jumpToMessage}
+              />
               {i === lastOwnIdx && lastOwnReaders.length > 0 && (
                 <div className="mt-0.5 flex items-center justify-end gap-1 pr-10">
                   <span className="text-[10px] text-zinc-500">
@@ -297,7 +309,7 @@ export function MessageList({
         <button
           type="button"
           onClick={scrollToBottom}
-          className="absolute bottom-3 left-1/2 z-10 -translate-x-1/2 rounded-full bg-indigo-600 px-3 py-1 text-xs font-medium text-white shadow-lg hover:bg-indigo-500"
+          className="absolute bottom-3 left-1/2 z-10 -translate-x-1/2 rounded-full bg-indigo-600 px-3.5 py-1.5 text-xs font-medium text-white shadow-xl shadow-black/40 ring-1 ring-white/10 transition-colors hover:bg-indigo-500"
         >
           New messages ↓
         </button>

@@ -1,7 +1,13 @@
+import path from "node:path";
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   skipTrailingSlashRedirect: true,
+  // Docker (Phase 10): self-contained server bundle at `web/.next/standalone`.
+  // The tracing root must be the MONOREPO root or the traced bundle would miss
+  // the workspace package @chat/shared (symlinked outside web/).
+  output: "standalone",
+  outputFileTracingRoot: path.resolve(process.cwd(), ".."),
   async rewrites() {
     const ws = process.env.WS_INTERNAL_URL ?? "http://localhost:4001";
     return [

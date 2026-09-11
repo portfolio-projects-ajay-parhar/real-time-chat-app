@@ -1,0 +1,96 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 680" font-family="ui-monospace, 'Cascadia Code', Menlo, monospace" font-size="12">
+  <defs>
+    <marker id="crow" markerWidth="14" markerHeight="10" refX="2" refY="5" orient="auto">
+      <path d="M12,1 L2,5 L12,9" fill="none" stroke="#52525b" stroke-width="1.5"/>
+    </marker>
+  </defs>
+  <style>
+    .tbl  { fill:#fafafa; stroke:#3f3f46; stroke-width:1.5; }
+    .head { fill:#e4e4e7; stroke:#3f3f46; stroke-width:1.5; }
+    .pk   { fill:#18181b; font-weight:bold; }
+    .fk   { fill:#7c2d12; font-weight:bold; }
+    .f    { fill:#27272a; }
+    .edge { fill:none; stroke:#52525b; stroke-width:1.5; }
+    .note { fill:#71717a; font-size:11px; }
+    .big  { fill:#52525b; font-size:16px; font-weight:bold; }
+  </style>
+
+  <!-- ============ User ============ -->
+  <rect class="tbl" x="30" y="30" width="230" height="240" rx="8"/>
+  <rect class="head" x="30" y="30" width="230" height="28" rx="8"/>
+  <text x="145" y="49" text-anchor="middle" class="pk">User</text>
+  <text x="42" y="78" class="pk">id            cuid PK</text>
+  <text x="42" y="98" class="f">email         unique</text>
+  <text x="42" y="118" class="f">name          display name</text>
+  <text x="42" y="138" class="f">passwordHash</text>
+  <text x="42" y="158" class="f">image         avatar key</text>
+  <text x="42" y="178" class="f">bio</text>
+  <text x="42" y="198" class="f">lastSeenAt    presence persistence</text>
+  <text x="42" y="218" class="f">createdAt</text>
+  <text x="42" y="242" class="note">+ NextAuth Account/Session models</text>
+
+  <!-- ============ Conversation ============ -->
+  <rect class="tbl" x="700" y="30" width="250" height="200" rx="8"/>
+  <rect class="head" x="700" y="30" width="250" height="28" rx="8"/>
+  <text x="825" y="49" text-anchor="middle" class="pk">Conversation</text>
+  <text x="712" y="78" class="pk">id             cuid PK</text>
+  <text x="712" y="98" class="f">type           DIRECT | GROUP</text>
+  <text x="712" y="118" class="f">name           GROUP only</text>
+  <text x="712" y="138" class="f">avatarKey      GROUP only</text>
+  <text x="712" y="158" class="f">createdById    → User</text>
+  <text x="712" y="178" class="f">createdAt</text>
+  <text x="712" y="198" class="f">lastMessageAt  denormalized ↓ sort</text>
+  <text x="712" y="216" class="note">idx(lastMessageAt desc)</text>
+
+  <!-- ============ ConversationMember ============ -->
+  <rect class="tbl" x="360" y="230" width="280" height="240" rx="8"/>
+  <rect class="head" x="360" y="230" width="280" height="28" rx="8"/>
+  <text x="500" y="249" text-anchor="middle" class="pk">ConversationMember</text>
+  <text x="372" y="278" class="pk">id             cuid PK</text>
+  <text x="372" y="298" class="fk">conversationId → Conversation</text>
+  <text x="372" y="318" class="fk">userId         → User</text>
+  <text x="372" y="338" class="f">role           OWNER | MEMBER</text>
+  <text x="372" y="358" class="f">lastReadAt     READ WATERMARK</text>
+  <text x="372" y="378" class="f">isMuted</text>
+  <text x="372" y="398" class="f">joinedAt</text>
+  <text x="372" y="420" class="note">uq(conversationId,userId) · idx(userId)</text>
+  <text x="372" y="446" class="note">msg.createdAt &lt;= my.lastReadAt     → read</text>
+  <text x="372" y="458" class="note">other.lastReadAt &gt;= msg.createdAt  → seen</text>
+
+  <!-- ============ Message ============ -->
+  <rect class="tbl" x="30" y="430" width="290" height="230" rx="8"/>
+  <rect class="head" x="30" y="430" width="290" height="28" rx="8"/>
+  <text x="175" y="449" text-anchor="middle" class="pk">Message</text>
+  <text x="42" y="478" class="pk">id               cuid PK</text>
+  <text x="42" y="498" class="fk">conversationId   → Conversation</text>
+  <text x="42" y="518" class="fk">senderId         → User (null=SYSTEM)</text>
+  <text x="42" y="538" class="f">type             TEXT|IMAGE|FILE|SYSTEM</text>
+  <text x="42" y="558" class="f">body             ≤4000, sanitized</text>
+  <text x="42" y="578" class="f">attachment*      key/name/size/mime/dims</text>
+  <text x="42" y="598" class="f">clientId         UNIQUE → resend dedupe</text>
+  <text x="42" y="618" class="fk">replyToId        → Message (self)</text>
+  <text x="42" y="638" class="f">createdAt · editedAt · deletedAt</text>
+  <text x="42" y="658" class="note">idx(conversationId, createdAt desc, id)  keyset</text>
+
+  <!-- self-relation loop on Message -->
+  <path class="edge" d="M320 498 C 385 498, 385 618, 320 618" marker-end="url(#crow)"/>
+  <text x="342" y="646" class="note">replies</text>
+
+  <!-- edges: User < ConversationMember > Conversation -->
+  <path class="edge" d="M260 150 C 330 150, 320 280, 360 300" marker-end="url(#crow)"/>
+  <text x="296" y="196" class="note">1 ── &lt; membership</text>
+  <path class="edge" d="M640 280 C 672 240, 676 170, 700 140" marker-end="url(#crow)"/>
+  <text x="668" y="212" class="note">&gt; ── 1</text>
+
+  <!-- Conversation < Message (routed below the member box) -->
+  <path class="edge" d="M320 545 C 450 585, 610 520, 664 458 L 760 232" marker-end="url(#crow)"/>
+  <text x="480" y="540" class="note">&lt; messages</text>
+
+  <!-- User < Message -->
+  <path class="edge" d="M145 270 L 145 430" marker-end="url(#crow)"/>
+  <text x="152" y="360" class="note">sends</text>
+
+  <text x="700" y="560" class="big">Watermark receipts</text>
+  <text x="700" y="580" class="note">one column answers "read by me?"</text>
+  <text x="700" y="596" class="note">and "seen by whom?" — Slack model</text>
+</svg>

@@ -27,9 +27,20 @@ const socketsKey = (userId: string) => `sockets:${userId}`;
 // membership change: SADD returns "1 whenever the member was newly added"
 // (i.e. for every new tab), not "1 for the first socket". Two instances
 // racing on connect/disconnect must also agree on exactly one transition.
-const SADD_SCARD_LUA = `
+//
+// The same script self-heals after a server crash: if the presence TTL key
+// is GONE, no live socket for this user exists anywhere in the cluster
+// (heartbeats stopped, key expired) — so any leftover entries in the
+// sockets set are garbage from sockets whose disconnect was never processed
+// (hard kill). They would otherwise suppress the online broadcast forever.
+const CONNECT_LUA = `
+if redis.call('EXISTS', KEYS[2]) == 0 then
+  redis.call('DEL', KEYS[1])
+end
 redis.call('SADD', KEYS[1], ARGV[1])
-return redis.call('SCARD', KEYS[1])
+local cardinality = redis.call('SCARD', KEYS[1])
+redis.call('SET', KEYS[2], '1', 'EX', tonumber(ARGV[2]))
+return cardinality
 `;
 
 const SREM_SCARD_LUA = `
@@ -71,10 +82,12 @@ export async function onSocketConnected(
 ): Promise<void> {
   const userId = socket.data.userId;
 
-  // Atomic SADD + SCARD: returns the new set cardinality. 1 → this socket is
-  // the user's first live socket (any tab/device, on any instance).
-  const cardinality = Number(await redis.eval(SADD_SCARD_LUA, 1, socketsKey(userId), socket.id));
-  await redis.set(presenceKey(userId), "1", "EX", PRESENCE_TTL_S);
+  // Atomic connect: stale-set cleanup (see script comment) + SADD + SET EX.
+  // Returns the new set cardinality. 1 → this socket is the user's first
+  // live socket (any tab/device, on any instance).
+  const cardinality = Number(
+    await redis.eval(CONNECT_LUA, 2, socketsKey(userId), presenceKey(userId), socket.id, PRESENCE_TTL_S)
+  );
 
   if (cardinality === 1) {
     // Came online: stamp lastSeenAt on the way (offline writes a sharper one).

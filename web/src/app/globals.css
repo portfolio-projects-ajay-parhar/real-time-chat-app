@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #09090b;
+  --foreground: #ededed;
 }
 
 @theme inline {
@@ -12,15 +12,89 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+}
+
+/* ---------- chat polish ---------- */
+
+/* Subtle dot-grid wallpaper behind the timeline (WhatsApp-style canvas). */
+.chat-bg {
+  background-image: radial-gradient(rgb(255 255 255 / 0.03) 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+
+/* Slim, unobtrusive scrollbars for the chat panes. */
+.chat-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(63 63 70 / 0.6) transparent;
+}
+.chat-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+.chat-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.chat-scroll::-webkit-scrollbar-thumb {
+  background: rgb(63 63 70 / 0.6);
+  border-radius: 9999px;
+}
+.chat-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgb(82 82 91 / 0.8);
+}
+
+/* New message slides softly into the timeline. */
+@keyframes msg-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.msg-in {
+  animation: msg-in 180ms ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .msg-in {
+    animation: none;
+  }
+}
+
+/* Highlight pulse for "jump to reply" targets. */
+@keyframes highlight-flash {
+  0% {
+    background-color: rgb(99 102 241 / 0.25);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+.highlight-flash {
+  animation: highlight-flash 1.6s ease-out forwards;
+}
+
+/* Typing dots: a gentle wave instead of a hard bounce. */
+@keyframes typing-wave {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.5;
+  }
+  30% {
+    transform: translateY(-3px);
+    opacity: 1;
+  }
+}
+.typing-dot {
+  animation: typing-wave 1.2s ease-in-out infinite;
+}
+
+::selection {
+  background: rgb(99 102 241 / 0.35);
 }

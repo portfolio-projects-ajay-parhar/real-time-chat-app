@@ -27,48 +27,85 @@ services:
       timeout: 3s
       retries: 10
 
-  # --- adapter proof (docker compose --profile prod up) ---
+  # --- prod-image topology (docker compose --profile prod-verify up) ---
+  # Everything enters through nginx on :8080: /socket.io/ round-robins across
+  # the TWO ws instances (Redis adapter fan-out), / goes to the Next standalone
+  # server. The one-shot `migrate` service runs `prisma migrate deploy` first.
+  migrate:
+    profiles: ["prod-verify"]
+    build:
+      context: .
+      dockerfile: web/Dockerfile
+      target: migrator
+    command: npx prisma migrate deploy --schema web/prisma/schema.prisma
+    environment:
+      DATABASE_URL: postgresql://chat:chat@postgres:5432/chat?schema=public
+    depends_on:
+      postgres: { condition: service_healthy }
+
   ws-1:
-    profiles: ["prod"]
-    build: ./ws
+    profiles: ["prod-verify"]
+    build:
+      context: .
+      dockerfile: ws/Dockerfile
     environment:
       WS_PORT: "4001"
       DATABASE_URL: postgresql://chat:chat@postgres:5432/chat?schema=public
       REDIS_URL: redis://redis:6379
-      ORIGIN: http://localhost:3000
+      ORIGIN: http://localhost:8080
       NEXTAUTH_SECRET: ${NEXTAUTH_SECRET}
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
 
   ws-2:
-    profiles: ["prod"]
-    build: ./ws
+    profiles: ["prod-verify"]
+    build:
+      context: .
+      dockerfile: ws/Dockerfile
     environment:
       WS_PORT: "4001"
       DATABASE_URL: postgresql://chat:chat@postgres:5432/chat?schema=public
       REDIS_URL: redis://redis:6379
-      ORIGIN: http://localhost:3000
+      ORIGIN: http://localhost:8080
       NEXTAUTH_SECRET: ${NEXTAUTH_SECRET}
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
 
   web:
-    profiles: ["prod"]
-    build: ./web
+    profiles: ["prod-verify"]
+    build:
+      context: .
+      dockerfile: web/Dockerfile
+      target: runner
     environment:
       DATABASE_URL: postgresql://chat:chat@postgres:5432/chat?schema=public
       REDIS_URL: redis://redis:6379
       NEXTAUTH_SECRET: ${NEXTAUTH_SECRET}
-      NEXTAUTH_URL: http://localhost:3000
-      WS_INTERNAL_URL: http://ws-1:4001
-    ports:
-      - "3000:3000"
+      NEXTAUTH_URL: http://localhost:8080
+      WS_INTERNAL_URL: http://nginx
+      STORAGE_PROVIDER: local
+    volumes:
+      - media:/app/.data/uploads
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
+      migrate: { condition: service_completed_successfully }
+
+  nginx:
+    profiles: ["prod-verify"]
+    image: nginx:1.27-alpine
+    ports:
+      - "8080:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - web
+      - ws-1
+      - ws-2
 
 volumes:
   pgdata:
   redisdata:
+  media:

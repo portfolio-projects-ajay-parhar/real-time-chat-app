@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Avatar } from "./Avatar";
@@ -48,13 +48,21 @@ export function GroupMembersSheet({
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebouncedValue(search, 250);
 
-  useEffect(() => {
+  // Reset the editor state when the sheet opens (or the conversation renames
+  // while open) — render-time "adjust state on prop change" pattern instead of
+  // setState inside an effect (React Compiler lint: set-state-in-effect).
+  const [resetKey, setResetKey] = useState<{ open: boolean; name: string | null }>({
+    open,
+    name: conversation.name ?? null,
+  });
+  if (resetKey.open !== open || resetKey.name !== (conversation.name ?? null)) {
+    setResetKey({ open, name: conversation.name ?? null });
     if (open) {
       setError(null);
       setName(conversation.name ?? "");
       setSearch("");
     }
-  }, [open, conversation.name]);
+  }
 
   // Add-member directory — existing members filtered out.
   const { data: candidates } = useQuery({

@@ -19,6 +19,7 @@ export function MessageBubble({
   message,
   viewerId,
   showSender,
+  grouped,
   read,
   canEdit,
   canDelete,
@@ -30,6 +31,8 @@ export function MessageBubble({
   message: ChatMessage;
   viewerId: string;
   showSender: boolean;
+  /** This bubble continues the same sender's previous message (tail grouping). */
+  grouped?: boolean;
   /** DIRECT only: the other member's watermark covers this message. */
   read?: boolean;
   canEdit: boolean;
@@ -52,7 +55,13 @@ export function MessageBubble({
   }, [editing]);
 
   if (message.type === "SYSTEM") {
-    return <div className="my-2 text-center text-xs text-zinc-500">{message.body}</div>;
+    return (
+      <div className="my-3 flex justify-center">
+        <span className="rounded-full bg-zinc-800/60 px-3 py-1 text-[11px] text-zinc-400 ring-1 ring-white/5">
+          {message.body}
+        </span>
+      </div>
+    );
   }
 
   const own = message.senderId === viewerId;
@@ -85,7 +94,7 @@ export function MessageBubble({
       <div className={`flex gap-2 ${own ? "flex-row-reverse" : ""}`}>
         <div className="w-8 shrink-0" />
         <div className="flex max-w-[75%] flex-col">
-          <div className="rounded-2xl border border-dashed border-zinc-700 bg-zinc-800/40 px-3 py-2 text-sm italic text-zinc-500">
+          <div className="rounded-2xl border border-dashed border-zinc-700/80 bg-zinc-800/30 px-3 py-2 text-sm italic text-zinc-500">
             Message deleted
           </div>
         </div>
@@ -94,7 +103,7 @@ export function MessageBubble({
   }
 
   const actionButton =
-    "rounded bg-zinc-800/80 px-1.5 py-0.5 text-[10px] text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200 focus-visible:bg-zinc-700";
+    "flex h-6 w-6 items-center justify-center rounded-full bg-zinc-800/95 text-[11px] text-zinc-400 shadow-md shadow-black/30 ring-1 ring-white/10 transition-colors hover:bg-zinc-700 hover:text-zinc-100 focus-visible:bg-zinc-700";
 
   return (
     <div className={`group flex gap-2 ${own ? "flex-row-reverse" : ""}`}>
@@ -103,28 +112,38 @@ export function MessageBubble({
           <Avatar name={message.sender.name} imageKey={message.sender.image} size={32} />
         )}
       </div>
-      <div className={`max-w-[75%] ${own ? "items-end text-right" : ""} flex flex-col`}>
+      <div className={`relative flex max-w-[75%] flex-col ${own ? "items-end text-right" : ""}`}>
         {showSender && !own && (
           <span className="mb-0.5 text-xs text-zinc-400">{message.sender?.name}</span>
         )}
         <div
-          className={`rounded-2xl px-3 py-2 text-sm whitespace-pre-wrap break-words ${
-            own ? "bg-indigo-600 text-white" : "bg-zinc-800 text-zinc-100"
-          } ${message.failed ? "border border-red-500/60" : ""}`}
+          className={`px-3.5 py-2 text-sm whitespace-pre-wrap break-words shadow-lg shadow-black/20 ${
+            own
+              ? `bg-gradient-to-b from-indigo-500 to-indigo-600 text-white ${
+                  grouped ? "rounded-2xl rounded-tr-md rounded-br-md" : "rounded-2xl rounded-br-md"
+                }`
+              : `bg-zinc-800 text-zinc-100 ring-1 ring-white/5 ${
+                  grouped ? "rounded-2xl rounded-tl-md rounded-bl-md" : "rounded-2xl rounded-bl-md"
+                }`
+          } ${message.pending ? "opacity-80" : ""} ${
+            message.failed ? "ring-1 ring-red-500/70" : ""
+          }`}
         >
           {message.replyTo && (
             <button
               type="button"
               onClick={() => onJumpToMessage(message.replyTo!.id)}
               title="Jump to the original message"
-              className={`mb-1 block w-full rounded border-l-2 pl-2 text-left text-xs opacity-80 ${
-                own ? "border-white/60 hover:bg-white/10" : "border-indigo-400/60 hover:bg-white/5"
+              className={`mb-1.5 block w-full rounded-md border-l-2 pl-2 pr-2 py-0.5 text-left text-xs transition-colors ${
+                own
+                  ? "border-white/70 bg-white/10 hover:bg-white/15"
+                  : "border-indigo-400/70 bg-black/20 hover:bg-black/30"
               }`}
             >
               <span className="block font-medium">
                 {message.replyTo.sender?.name ?? "Unknown"}
               </span>
-              <span className="line-clamp-2">
+              <span className="line-clamp-2 opacity-80">
                 {message.replyTo.body ?? `[${message.replyTo.type.toLowerCase()}]`}
               </span>
             </button>
@@ -154,38 +173,51 @@ export function MessageBubble({
             <AttachmentBody message={message} />
           )}
         </div>
-        <div className="mt-0.5 flex h-4 items-center gap-1 text-[10px] text-zinc-500">
-          {message.pending && <span title="sending">⏱</span>}
-          {message.failed && <span className="text-red-400">failed to send</span>}
+        <div className="mt-0.5 flex h-4 items-center gap-1.5 text-[10px] text-zinc-500">
+          {message.pending && (
+            <span title="Sending…" className="animate-pulse">
+              ⏳
+            </span>
+          )}
+          {message.failed && <span className="font-medium text-red-400">failed to send</span>}
           {own && !message.pending && !message.failed &&
             (read ? (
-              <span title="Read" className="text-indigo-400">✓✓</span>
+              <span title="Read" className="font-semibold tracking-tighter text-sky-400">
+                ✓✓
+              </span>
             ) : (
-              <span title="Sent">✓</span>
+              <span title="Sent" className="opacity-70">
+                ✓
+              </span>
             ))}
-          <span>
+          <span className="tabular-nums">
             {new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-            {edited && <span className="italic"> · edited</span>}
+            {edited && <span className="italic opacity-80"> · edited</span>}
           </span>
         </div>
-        {/* Action menu — appears on hover/focus for delivered, live messages. */}
+                {/* Action menu — overlays beside the bubble on hover/focus (no layout shift). */}
         {!message.pending && !message.failed && (
           <div
-            className={`-mt-1 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100 ${
-              own ? "flex-row-reverse" : ""
+            className={`absolute top-1 z-10 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 ${
+              own ? "right-full mr-2" : "left-full ml-2"
             }`}
           >
-            <button type="button" className={actionButton} onClick={() => onReply(message)}>
-              Reply
+            <button type="button" className={actionButton} onClick={() => onReply(message)} title="Reply">
+              ↩
             </button>
             {canEdit && (
-              <button type="button" className={actionButton} onClick={startEdit}>
-                Edit
+              <button type="button" className={actionButton} onClick={startEdit} title="Edit">
+                ✎
               </button>
             )}
             {canDelete && (
-              <button type="button" className={actionButton} onClick={() => onDelete(message.id)}>
-                Delete
+              <button
+                type="button"
+                className={actionButton}
+                onClick={() => onDelete(message.id)}
+                title="Delete"
+              >
+                🗑
               </button>
             )}
           </div>
@@ -227,7 +259,7 @@ function AttachmentBody({ message }: { message: ChatMessage }) {
                   loading="lazy"
                   width={message.attachmentWidth ?? undefined}
                   height={message.attachmentHeight ?? undefined}
-                  className="max-h-80 w-auto max-w-full rounded-lg object-contain"
+                  className="h-auto max-h-80 w-auto max-w-full rounded-lg object-contain"
                 />
               </button>
             ) : (

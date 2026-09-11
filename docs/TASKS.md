@@ -1,6 +1,6 @@
 # Real-Time Chat App — Agent Task List
 
-> **STATUS: IN PROGRESS (2026-09-10)** — Phases 1-9 complete.
+> **STATUS: COMPLETE (2026-09-10)** — Phases 1-10 complete. All phases done; CI run green pending first push to GitHub (Actions can only run post-push).
 
 > Derived from [`PLAN.md`](./PLAN.md) and the individual files in the [`phases/`](./phases/) directory. Work through phases **in order** — each phase depends on the previous one. Mark `[/]` when in progress, `[x]` when done. Mirror progress to [`../tasks-progress.md`](../tasks-progress.md).
 
@@ -152,21 +152,21 @@
 
 ## Phase 10 — Testing, Docker & CI/CD
 
-- [ ] Unit suites green: shared schemas; ws rate-limiter (fake timers) + presence (ioredis-mock); web optimistic reducer + cursor lib
-- [ ] **Two-instance integration suite** (`ws/test/integration/`): two `socket.io-client`s against ws:4001 + ws:4002 (same Redis) — cross-instance delivery, unread, receipts, presence, DM dedupe under parallel create, rate-limit 429, kicked-member 403, clientId dedupe on reconnect
-- [ ] `Dockerfile` × 2 (web standalone output; ws `node dist/index.js`) + prod-profile compose (web, ws-1, ws-2, postgres, redis, nginx with `/socket.io` upgrade headers)
-- [ ] GitHub Actions — install → typecheck ×3 → lint → unit → integration (services postgres+redis) → build images
-- [ ] README — problem, features, **architecture diagram**, ER diagram, event-contract table, trade-offs (§PLAN), scaling story (adapter → more instances), screenshots, demo GIF
-- [ ] `architecture.svg` + `ER-diagram.svg` in `docs/`
-- [ ] Final sweep: `npm run typecheck && npm run test && npm run build` all green
+- [x] Unit suites green: shared schemas (`shared/test/schemas.test.ts`, 27 tests — every zod payload accept/reject table + event-name constants); ws rate-limiter (fake timers) + presence service with `ioredis-mock` (`ws/test/presence.unit.test.ts`, 8 tests — first/last-socket transitions, TTL writes, untracked-socket no-op, heartbeat dedupe); web optimistic reducer + cursor lib (cumulative, 105 tests)
+- [x] **Two-instance integration suite** (`ws/test/integration/lifecycle.integration.test.ts`, ports 4131/4132, 4 tests): DM advisory-lock dedupe under parallel create (imports the REAL `findOrCreateDirectConversation`), unread fan-out to bob's SECOND device (third client, other instance), kicked-member send acks `NOT_FOUND` without reconnect (DB re-check; 404-not-403 per the Phase 6 convention — the phase sketch's `FORBIDDEN` was superseded), typing throttle ≤1 broadcast/2 s. Cross-instance delivery, receipts, presence mutuals-only, rate-limit 429 and reconnect clientId dedupe are covered by the pre-existing presence/messaging/receipts integration suites
+- [x] `Dockerfile` × 2 (web multi-stage standalone `output: "standalone"` + `outputFileTracingRoot` so @chat/shared traces; ws tsc → `node dist/index.js` with `/health` healthcheck) + `prod-verify` compose profile (migrate one-shot `prisma migrate deploy` → web + ws-1 + ws-2 + nginx `nginx/nginx.conf` with `/socket.io/` upgrade headers, round-robin upstream, `:8080`)
+- [x] GitHub Actions `.github/workflows/ci.yml` — install → migrate+seed → typecheck ×3 → lint → unit + two-instance integration (services postgres:16 + redis:7) → `npm run build` → both `docker build`s
+- [x] README — problem, features, stack table, ASCII architecture + send-pipeline, data-model decisions, event-contract tables, REST surface, JWE auth bridge, security matrix, testing table, getting started + adapter-proof topology, trade-offs (§PLAN verbatim), scaling story, What I Learned
+- [x] `docs/architecture.svg` + `docs/ER-diagram.svg` in `docs/` + capstone screenshot `docs/screenshots/prod-verify-cross-instance-chat.png`
+- [x] Final sweep: `npm run typecheck && npm run test && npm run build` all green; the 4 pre-existing Phase 8 React-Compiler lint errors FIXED (GroupMembersSheet/MessageList: render-time "adjust state on prop change" instead of setState-in-effect; scrollToBottom useCallback removed so the compiler memoizes)
 
 ---
 
 ## Definition of Done
 
-- [ ] Two browser windows (different users) chat in real time across **two WS instances**
-- [ ] Presence, typing, read receipts, unread badges all live and correct after refresh
-- [ ] Message history survives restart (Postgres) and reconnect (gap backfill)
-- [ ] Image + file attachments upload, render, download
-- [ ] Integration suite proves cross-instance fan-out with real Redis
-- [ ] CI green on GitHub Actions; README tells the architecture story
+- [x] Two browser windows (different users) chat in real time across **two WS instances** — capstone proven live through the prod-verify nginx topology (alice@ws-1 ↔ bob@ws-2, both directions + typing)
+- [x] Presence, typing, read receipts, unread badges all live and correct after refresh
+- [x] Message history survives restart (Postgres) and reconnect (gap backfill)
+- [x] Image + file attachments upload, render, download
+- [x] Integration suite proves cross-instance fan-out with real Redis
+- [ ] CI green on GitHub Actions (pipeline committed; runs on first push — local equivalents all green); README tells the architecture story

@@ -5,6 +5,7 @@ import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { ConversationItem } from "@/components/chat/ConversationItem";
 import { NotificationsChip } from "@/components/chat/NotificationsChip";
+import { UserMenu } from "@/components/chat/UserMenu";
 import { inboxQuery } from "@/lib/queries";
 
 /**
@@ -26,7 +27,8 @@ export default function ConversationsPage() {
           <h1 className="text-lg font-semibold text-zinc-100">Chats</h1>
           <div className="flex items-center gap-3">
             <NotificationsChip />
-            <span className="text-xs text-zinc-500">{session?.user?.name}</span>
+            <span className="truncate text-xs text-zinc-500">{session?.user?.name}</span>
+            <UserMenu compact />
             <Link
               href="/new"
               className="rounded-full bg-indigo-600 px-3 py-1 text-xs font-medium text-white hover:bg-indigo-500"

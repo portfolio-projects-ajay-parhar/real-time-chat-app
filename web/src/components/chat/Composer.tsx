@@ -324,7 +324,7 @@ export function Composer({
           type="button"
           onClick={() => fileInputRef.current?.click()}
           title="Attach an image or file"
-          className="flex h-9 w-9 items-center justify-center rounded-full bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-zinc-800/80 text-lg leading-none text-zinc-400 ring-1 ring-white/5 transition-colors hover:bg-zinc-700 hover:text-zinc-200"
         >
           +
         </button>
@@ -349,13 +349,13 @@ export function Composer({
           }}
           onBlur={() => sendTyping("stop")}
           onKeyDown={onKeyDown}
-          className="max-h-40 flex-1 resize-none rounded-2xl bg-zinc-800 px-3 py-2 text-sm text-zinc-100 outline-none placeholder:text-zinc-500 focus:ring-1 focus:ring-indigo-500"
+          className="max-h-40 flex-1 resize-none rounded-2xl bg-zinc-800 px-4 py-2 text-sm text-zinc-100 outline-none ring-1 ring-white/5 transition-shadow placeholder:text-zinc-500 focus:bg-zinc-800/90 focus:ring-2 focus:ring-indigo-500/70"
         />
         <button
           type="button"
           onClick={send}
           disabled={!socket || uploading || (!value.trim() && !attachment)}
-          className="h-9 rounded-full bg-indigo-600 px-4 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-40"
+          className="h-9 rounded-full bg-gradient-to-b from-indigo-500 to-indigo-600 px-4 text-sm font-medium text-white shadow-sm shadow-indigo-950/50 transition-[filter,opacity] hover:brightness-110 disabled:opacity-40"
         >
           {uploading ? "Uploading…" : "Send"}
         </button>

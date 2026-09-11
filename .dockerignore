@@ -1,0 +1,10 @@
+# Keep build contexts lean — host-native node_modules/.next must never reach
+# the Linux build (stale binaries would shadow the fresh `npm ci`).
+**/node_modules
+web/.next
+web/.data
+web/tsconfig.tsbuildinfo
+shared/dist
+ws/dist
+.git
+docs

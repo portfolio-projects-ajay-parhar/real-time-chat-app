@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 540" font-family="ui-monospace, 'Cascadia Code', Menlo, monospace" font-size="13">
+  <defs>
+    <marker id="arr" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+      <path d="M0,0 L10,4 L0,8 z" fill="#52525b"/>
+    </marker>
+    <marker id="arrR" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+      <path d="M0,0 L10,4 L0,8 z" fill="#e11d48"/>
+    </marker>
+  </defs>
+  <style>
+    .box   { fill:#fafafa; stroke:#3f3f46; stroke-width:1.5; rx:8; }
+    .data  { fill:#ecfdf5; stroke:#059669; stroke-width:1.5; }
+    .edge  { fill:none; stroke:#52525b; stroke-width:1.5; }
+    .edgeR { fill:none; stroke:#e11d48; stroke-width:1.5; stroke-dasharray:6 4; }
+    .lbl   { fill:#18181b; }
+    .ttl   { fill:#18181b; font-weight:bold; font-size:14px; }
+    .sub   { fill:#71717a; font-size:11px; }
+  </style>
+
+  <!-- browsers -->
+  <rect class="box" x="20" y="40" width="150" height="70" rx="8"/>
+  <text x="95" y="72" text-anchor="middle" class="lbl">Browser A</text>
+  <text x="95" y="92" text-anchor="middle" class="sub">React + TanStack Query</text>
+  <rect class="box" x="20" y="150" width="150" height="70" rx="8"/>
+  <text x="95" y="182" text-anchor="middle" class="lbl">Browser B</text>
+  <text x="95" y="202" text-anchor="middle" class="sub">optimistic sends</text>
+
+  <!-- nginx -->
+  <rect class="box" x="250" y="95" width="140" height="80" rx="8"/>
+  <text x="320" y="130" text-anchor="middle" class="lbl">nginx :8080</text>
+  <text x="320" y="152" text-anchor="middle" class="sub">/ → web · /socket.io/ → ws×N</text>
+
+  <!-- web -->
+  <rect class="box" x="470" y="20" width="170" height="80" rx="8"/>
+  <text x="555" y="55" text-anchor="middle" class="lbl">web (Next.js)</text>
+  <text x="555" y="78" text-anchor="middle" class="sub">REST API · media · auth</text>
+
+  <!-- ws instances -->
+  <rect class="box" x="470" y="140" width="170" height="70" rx="8"/>
+  <text x="555" y="170" text-anchor="middle" class="lbl">ws-1 (Socket.IO)</text>
+  <text x="555" y="192" text-anchor="middle" class="sub">rooms · acks · presence</text>
+  <rect class="box" x="470" y="230" width="170" height="70" rx="8"/>
+  <text x="555" y="260" text-anchor="middle" class="lbl">ws-2 (Socket.IO)</text>
+  <text x="555" y="282" text-anchor="middle" class="sub">same image, same Redis</text>
+
+  <!-- redis -->
+  <rect class="data" x="720" y="140" width="170" height="120" rx="8"/>
+  <text x="805" y="168" text-anchor="middle" class="lbl">Redis 7</text>
+  <text x="735" y="192" class="sub">socket.io Pub/Sub fan-out</text>
+  <text x="735" y="212" class="sub">presence:{userId} (TTL 70s)</text>
+  <text x="735" y="232" class="sub">sockets:{userId} · unread:{userId}</text>
+  <text x="735" y="250" class="sub">ratelimit:{userId}:msg</text>
+
+  <!-- postgres -->
+  <rect class="data" x="720" y="310" width="170" height="90" rx="8"/>
+  <text x="805" y="338" text-anchor="middle" class="lbl">PostgreSQL 16</text>
+  <text x="735" y="362" class="sub">messages · conversations ·</text>
+  <text x="735" y="380" class="sub">memberships · lastReadAt</text>
+
+  <!-- edges -->
+  <path class="edge" d="M170 75 L250 110" marker-end="url(#arr)"/>
+  <path class="edge" d="M170 185 L250 160" marker-end="url(#arr)"/>
+  <text x="185" y="95" class="sub">HTTP + WS</text>
+  <path class="edge" d="M390 120 L470 60" marker-end="url(#arr)"/>
+  <path class="edge" d="M390 145 L470 172" marker-end="url(#arr)"/>
+  <path class="edge" d="M390 150 L470 258" marker-end="url(#arr)"/>
+  <text x="398" y="215" class="sub" transform="rotate(28 398 215)">round-robin</text>
+  <path class="edge" d="M640 60 L720 60 L720 175" marker-end="url(#arr)"/>
+  <text x="648" y="52" class="sub">Prisma</text>
+  <path class="edge" d="M640 175 L720 185" marker-end="url(#arrR)"/>
+  <text x="646" y="170" class="sub" fill="#e11d48">adapter</text>
+  <path class="edge" d="M640 265 L720 240" marker-end="url(#arrR)"/>
+  <path class="edge" d="M805 310 L805 260" marker-end="url(#arr)"/>
+  <text x="812" y="292" class="sub">watermarks · messages</text>
+  <path class="edgeR" d="M640 100 L720 100 L720 310" marker-end="url(#arrR)"/>
+  <text x="648" y="300" class="sub" fill="#e11d48">migrate · seed</text>
+</svg>

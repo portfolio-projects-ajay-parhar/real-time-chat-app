@@ -182,7 +182,7 @@ export function ChatView({
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col">
-      <header className="flex items-center gap-3 border-b border-zinc-800 px-4 py-3">
+      <header className="sticky top-0 z-10 flex items-center gap-3 border-b border-zinc-800/80 bg-zinc-950/70 px-4 py-3 backdrop-blur-md">
         <Link
           href="/conversations"
           className="rounded-full bg-zinc-800 px-2 py-1 text-xs text-zinc-300 hover:bg-zinc-700 md:hidden"

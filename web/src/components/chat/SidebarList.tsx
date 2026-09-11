@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { ConversationItem } from "./ConversationItem";
 import { NotificationsChip } from "./NotificationsChip";
+import { UserMenu } from "./UserMenu";
 import { inboxQuery } from "@/lib/queries";
 
 /**
@@ -54,6 +55,7 @@ export function SidebarList({ viewerId }: { viewerId: string }) {
           />
         ))}
       </div>
+      <UserMenu />
     </>
   );
 }

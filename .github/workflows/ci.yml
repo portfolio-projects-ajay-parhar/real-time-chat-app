@@ -1,0 +1,79 @@
+name: CI
+
+on:
+  push:
+    branches: [main, build]
+  pull_request:
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: chat
+          POSTGRES_PASSWORD: chat
+          POSTGRES_DB: chat
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U chat -d chat"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+      redis:
+        image: redis:7
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://chat:chat@localhost:5432/chat?schema=public
+      REDIS_URL: redis://localhost:6379
+      NEXTAUTH_SECRET: ci-test-secret-not-for-production
+      NEXTAUTH_URL: http://localhost:3000
+      WS_PORT: "4001"
+      WS_INTERNAL_URL: http://localhost:4001
+      ORIGIN: http://localhost:3000
+      STORAGE_PROVIDER: local
+      NEXT_TELEMETRY_DISABLED: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Migrate + seed
+        run: |
+          npx prisma migrate deploy --schema web/prisma/schema.prisma
+          npm run db:seed
+
+      - name: Typecheck (shared, ws, web)
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      # shared schemas → ws unit (fake timers, ioredis-mock) → web reducers.
+      # Integration suites auto-skip without DATABASE_URL/REDIS_URL — both are
+      # exported above, so the two-instance suites run against the services.
+      - name: Unit + integration tests
+        run: npm run test
+
+      - name: Build (shared, web standalone, ws dist)
+        run: npm run build
+
+      - name: Docker build (web standalone + ws dist)
+        run: |
+          docker build -t chat-web -f web/Dockerfile --target runner .
+          docker build -t chat-ws -f ws/Dockerfile --target runner .
