@@ -59,6 +59,12 @@ jobs:
         # so generate explicitly so `db:seed` (which imports @prisma/client) can run.
         run: npx prisma generate --schema web/prisma/schema.prisma
 
+      - name: Build shared package
+        # `@chat/shared` publishes types/runtime via shared/dist (gitignored), and
+        # web + ws import "@chat/shared" through that — so build it before any step
+        # (typecheck, lint, test) that resolves it on a clean checkout.
+        run: npm run build -w shared
+
       - name: Migrate + seed
         run: |
           npx prisma migrate deploy --schema web/prisma/schema.prisma

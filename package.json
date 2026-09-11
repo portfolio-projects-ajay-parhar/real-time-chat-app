@@ -12,7 +12,7 @@
     "dev:web": "npm run dev -w web",
     "dev:ws": "npm run dev -w ws",
     "build": "npm run build -w shared && npm run build -w web && npm run build -w ws",
-    "typecheck": "npm run typecheck -w shared && npm run typecheck -w ws && npm run typecheck -w web",
+    "typecheck": "npm run build -w shared && npm run typecheck -w shared && npm run typecheck -w ws && npm run typecheck -w web",
     "lint": "npm run lint -w web",
     "test": "npm run test -w shared && npm run test -w ws && npm run test -w web",
     "db:migrate": "prisma migrate dev --schema web/prisma/schema.prisma",
