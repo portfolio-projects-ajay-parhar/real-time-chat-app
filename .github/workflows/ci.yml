@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, build]
+    branches: [master]
   pull_request:
 
 jobs:
@@ -52,6 +52,12 @@ jobs:
 
       - name: Install
         run: npm ci
+
+      - name: Generate Prisma client
+        # `migrate deploy` does not run `prisma generate` (only `migrate dev` does),
+        # and the `@prisma/client` postinstall can't find the schema at the repo root,
+        # so generate explicitly so `db:seed` (which imports @prisma/client) can run.
+        run: npx prisma generate --schema web/prisma/schema.prisma
 
       - name: Migrate + seed
         run: |
